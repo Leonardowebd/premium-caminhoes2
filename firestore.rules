@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return true; } // Prototype logic: unrestricted for demo
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // Vehicles
+    function isValidVehicle(data) {
+      return data.brand is string && data.brand.size() <= 200 &&
+             data.model is string && data.model.size() <= 200 &&
+             data.price is number && data.price >= 0 &&
+             data.imageUrl is string && data.imageUrl.size() <= 2000;
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(vehicleId) && isValidVehicle(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Banners
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(bannerId);
+    }
+
+    // Brands
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(brandId);
+    }
+
+    // Settings
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Contacts
+    match /contacts/{msgId} {
+      allow create: if true;
+      allow read, delete, update: if isAdmin();
+    }
+
+    // Visits (Analytics)
+    match /visits/{visitId} {
+      allow create: if true;
+      allow read: if isAdmin();
+    }
+  }
+}

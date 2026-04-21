@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Heavy machinery and trucks available in inventory.",
+      "type": "object",
+      "properties": {
+        "brand": { "type": "string", "description": "Vehicle brand (e.g., Scania, Volvo)" },
+        "model": { "type": "string", "description": "Vehicle model name" },
+        "year": { "type": "integer", "description": "Manufacturing/Model year" },
+        "price": { "type": "number", "description": "Selling price in BRL" },
+        "kilometers": { "type": "integer", "description": "Kilometers driven" },
+        "transmission": { "type": "string", "description": "Transmission type (e.g., I-Shift, Opticruise)" },
+        "power": { "type": "string", "description": "Engine power (e.g., 540 CV)" },
+        "traction": { "type": "string", "description": "Traction type (e.g., 6x4, 6x2)" },
+        "imageUrl": { "type": "string", "format": "uri", "description": "Direct link to the vehicle main image" },
+        "gallery": { "type": "array", "items": { "type": "string", "format": "uri" }, "description": "Additional images for the vehicle" },
+        "description": { "type": "string", "description": "Detailed description of the vehicle" },
+        "isFeatured": { "type": "boolean", "description": "Whether to highlight on the home page" },
+        "type": { "type": "string", "description": "Category or type of vehicle" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["brand", "model", "year", "price", "imageUrl"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Promotional banners for the hero section.",
+      "type": "object",
+      "properties": {
+        "imageUrl": { "type": "string", "format": "uri" },
+        "title": { "type": "string" },
+        "link": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "required": ["imageUrl"]
+    },
+    "Brand": {
+      "title": "Brand",
+      "description": "Manufacturer brands list.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "logoUrl": { "type": "string", "format": "uri" }
+      },
+      "required": ["name"]
+    },
+    "Contact": {
+      "title": "Contact Message",
+      "description": "Messages sent from the contact form.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "whatsapp": { "type": "string" },
+        "message": { "type": "string" },
+        "subject": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "read", "answered"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "whatsapp", "message"]
+    },
+    "Visit": {
+      "title": "Site Visit",
+      "description": "Logged visitor session info for analytics.",
+      "type": "object",
+      "properties": {
+        "city": { "type": "string" },
+        "region": { "type": "string" },
+        "createdAt": { "type": "number" }
+      }
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global site configurations like logo and social links.",
+      "type": "object",
+      "properties": {
+        "logoUrl": { "type": "string", "format": "uri" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "vehicles": {
+      "schema": "Vehicle",
+      "description": "Collection of trucks and heavy vehicles."
+    },
+    "banners": {
+      "schema": "Banner",
+      "description": "Hero section banner management."
+    },
+    "brands": {
+      "schema": "Brand",
+      "description": "Available manufacturers for filtering."
+    },
+    "contacts": {
+      "schema": "Contact",
+      "description": "Form submissions from users."
+    },
+    "settings": {
+      "schema": "Settings",
+      "description": "Site-wide configuration constants."
+    },
+    "visits": {
+      "schema": "Visit",
+      "description": "Visitor logs for analytics dashboard."
+    }
+  }
+}

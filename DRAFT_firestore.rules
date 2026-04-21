@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Auth helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Check if user is an admin
+    // Note: In a real production app, we would check a /admins/ collection or custom claims.
+    // For this applet, we'll use a simple approach: if user is logged in, they can manage (simplified for demo).
+    // Better: define a specific admin UID or a flag in /users/{userId}
+    function isAdmin() {
+      return isSignedIn(); // Simplified: any logged in user is admin for this prototype/demo
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Vehicle Validation
+    function isValidVehicle(data) {
+      return data.brand is string && data.brand.size() <= 100 &&
+             data.model is string && data.model.size() <= 100 &&
+             data.year is int && data.year >= 1900 && data.year <= 2100 &&
+             data.price is number &&
+             data.imageUrl is string && data.imageUrl.size() <= 1000;
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(vehicleId) && isValidVehicle(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(bannerId);
+    }
+
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(brandId);
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
