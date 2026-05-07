@@ -1,6 +1,5 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
-import { storage, auth } from './firebase';
+import { storage } from './firebase';
 
 export type UploadResult =
   | { ok: true; url: string }
@@ -21,11 +20,6 @@ export async function uploadImage(
   }
 
   try {
-    // Ensure Firebase Auth session exists (anonymous) so Storage rules pass
-    if (!auth.currentUser) {
-      await signInAnonymously(auth);
-    }
-
     const ext = file.name.split('.').pop() ?? 'jpg';
     const name = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const storageRef = ref(storage, `${folder}/${name}`);
@@ -36,7 +30,9 @@ export async function uploadImage(
     console.error('uploadImage error:', err);
     const msg =
       err?.code === 'storage/unauthorized'
-        ? 'Sem permissão no Storage. Verifique as regras do Firebase Storage.'
+        ? 'Sem permissão no Storage. Atualize as regras em Firebase Console → Storage → Rules.'
+        : err?.code === 'storage/unknown'
+        ? 'Erro de CORS ou projeto inativo. Verifique o Firebase Console.'
         : err?.message ?? 'Erro desconhecido no upload.';
     return { ok: false, error: msg };
   }
