@@ -143,9 +143,6 @@ export default function ProductDetail() {
                   >
                     <MessageSquare size={18} className="mr-2" /> Falar no WhatsApp
                   </a>
-                  <button className="w-full bg-white/5 text-white h-16 flex items-center justify-center font-headline font-black uppercase tracking-widest text-sm hover:bg-white/10 transition-all">
-                     <Phone size={18} className="mr-2" /> Agendar Visita
-                  </button>
                </div>
                
                <div className="mt-12 flex items-center gap-4 p-4 bg-background/50 border border-white/5">

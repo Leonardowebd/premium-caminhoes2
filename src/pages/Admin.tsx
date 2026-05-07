@@ -405,6 +405,7 @@ function VehicleManager() {
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
     const [loading, setLoading] = useState(true);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
     const { register, handleSubmit, reset, setValue, getValues, control } = useForm();
 
     useEffect(() => {
@@ -425,7 +426,7 @@ function VehicleManager() {
             year: Number(data.year),
             kilometers: Number(data.kilometers),
             isFeatured: !!data.isFeatured,
-            gallery: data.galleryString?.split('\n').map((s: string) => s.trim()).filter(Boolean) || [],
+            gallery: galleryUrls,
             updatedAt: serverTimestamp(),
             createdAt: editingVehicle ? editingVehicle.createdAt : Date.now()
         };
@@ -451,10 +452,8 @@ function VehicleManager() {
 
     const handleEdit = (v: Vehicle) => {
         setEditingVehicle(v);
-        reset({
-            ...v,
-            galleryString: v.gallery?.join('\n') || ''
-        });
+        reset({ ...v });
+        setGalleryUrls(v.gallery || []);
         setIsFormOpen(true);
     };
 
@@ -473,8 +472,8 @@ function VehicleManager() {
                    <h1 className="text-4xl font-headline font-black text-white uppercase tracking-tighter mb-2">Gestão de Veículos</h1>
                    <p className="text-on-surface-variant uppercase tracking-widest text-xs font-bold">Adicione e gerencie o estoque premium.</p>
                 </div>
-                <button 
-                  onClick={() => {setEditingVehicle(null); reset(); setIsFormOpen(true);}}
+                <button
+                  onClick={() => { setEditingVehicle(null); reset(); setGalleryUrls([]); setIsFormOpen(true); }}
                   className="industrial-gradient text-black font-headline font-black uppercase text-xs tracking-widest px-8 py-4 flex items-center gap-3 hover:scale-105 transition-all"
                 >
                    <Plus size={18} /> Novo Veículo
@@ -579,30 +578,33 @@ function VehicleManager() {
                               </div>
                            </div>
                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold uppercase text-primary tracking-widest">URL da Imagem Principal*</label>
-                              <input {...register('imageUrl', { required: true })} defaultValue={editingVehicle?.imageUrl} className="w-full bg-[#2a2a2a] border-none text-white py-3 px-4 outline-none mb-2" />
-                              <MediaUpload 
-                                label="Ou suba a mídia principal" 
-                                folder="vehicles" 
-                                onUpload={(url) => setValue('imageUrl', url)} 
+                              <MediaUpload
+                                label="Imagem Principal *"
+                                folder="vehicles"
+                                onUpload={(url) => setValue('imageUrl', url)}
+                                initialUrl={editingVehicle?.imageUrl}
                               />
                            </div>
                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Imagens Adicionais (Galeria) - Uma URL por linha</label>
-                              <textarea 
-                                 {...register('galleryString')} 
-                                 defaultValue={editingVehicle?.gallery?.join('\n')} 
-                                 className="w-full bg-[#2a2a2a] border-none text-white py-3 px-4 outline-none h-24 resize-none mb-2" 
-                                 placeholder="https://...&#10;https://..."
+                              <MediaUpload
+                                label="Adicionar à Galeria"
+                                folder="vehicles/gallery"
+                                onUpload={(url) => setGalleryUrls(prev => [...prev, url])}
                               />
-                              <MediaUpload 
-                                label="Ou adicione mídia à galeria" 
-                                folder="vehicles/gallery" 
-                                onUpload={(url) => {
-                                    const current = getValues('galleryString') || '';
-                                    setValue('galleryString', current + (current ? '\n' : '') + url);
-                                }} 
-                              />
+                              {galleryUrls.length > 0 && (
+                                <div className="mt-3 grid grid-cols-4 gap-2">
+                                  {galleryUrls.map((url, idx) => (
+                                    <div key={idx} className="relative group">
+                                      <img src={url} alt="" className="w-full aspect-square object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={() => setGalleryUrls(prev => prev.filter((_, i) => i !== idx))}
+                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                                      >×</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                            </div>
                         </div>
                         
@@ -782,6 +784,9 @@ function SettingsManager() {
     const [settings, setSettings] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [credFeedback, setCredFeedback] = useState<string | null>(null);
+    const [newUsername, setNewUsername] = useState('');
+    const [newPassword, setNewPassword] = useState('');
     const { register, handleSubmit, setValue, getValues } = useForm();
 
     useEffect(() => {
@@ -817,6 +822,34 @@ function SettingsManager() {
         } catch (err) {
             console.error(err);
             alert('Erro ao salvar configurações.');
+        }
+    };
+
+    const handleCredentialUpdate = async () => {
+        if (!newUsername.trim() || !newPassword.trim()) {
+            alert('Preencha o novo usuário e a nova senha.');
+            return;
+        }
+        try {
+            if (settings) {
+                await updateDoc(doc(db, 'settings', settings.id), {
+                    adminUsername: newUsername.trim(),
+                    adminPassword: newPassword.trim(),
+                });
+            } else {
+                await addDoc(collection(db, 'settings'), {
+                    adminUsername: newUsername.trim(),
+                    adminPassword: newPassword.trim(),
+                });
+            }
+            setCredFeedback('Credenciais atualizadas com sucesso!');
+            setNewUsername('');
+            setNewPassword('');
+            setTimeout(() => setCredFeedback(null), 3000);
+            fetchSettings();
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao atualizar credenciais.');
         }
     };
 
@@ -863,6 +896,50 @@ function SettingsManager() {
                      Salvar Alterações
                   </button>
                </form>
+            </div>
+
+            {/* Credentials Section */}
+            <div className="bg-surface p-10 border border-white/5 max-w-2xl mt-8">
+               <h2 className="text-xl font-headline font-black text-white uppercase mb-2 border-l-4 border-primary pl-4">Credenciais de Acesso</h2>
+               <p className="text-on-surface-variant uppercase tracking-widest text-xs font-bold mb-8">Altere o usuário e senha do painel.</p>
+
+               {credFeedback && (
+                   <div className="bg-green-500/20 border border-green-500 text-green-500 p-4 font-bold uppercase text-[10px] tracking-widest flex items-center gap-3 mb-6">
+                       <CheckCircle size={16} /> {credFeedback}
+                   </div>
+               )}
+
+               <div className="space-y-4">
+                  <div className="space-y-1">
+                     <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Novo Usuário</label>
+                     <input
+                        type="text"
+                        value={newUsername}
+                        onChange={(e) => setNewUsername(e.target.value)}
+                        className="w-full bg-[#2a2a2a] border-none text-white py-4 px-6 outline-none"
+                        placeholder="Novo usuário"
+                        autoComplete="off"
+                     />
+                  </div>
+                  <div className="space-y-1">
+                     <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Nova Senha</label>
+                     <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full bg-[#2a2a2a] border-none text-white py-4 px-6 outline-none"
+                        placeholder="Nova senha"
+                        autoComplete="new-password"
+                     />
+                  </div>
+                  <button
+                     type="button"
+                     onClick={handleCredentialUpdate}
+                     className="industrial-gradient text-black px-12 py-5 font-headline font-black uppercase tracking-widest text-sm hover:scale-105 transition-all shadow-xl shadow-primary/20"
+                  >
+                     Atualizar Credenciais
+                  </button>
+               </div>
             </div>
         </div>
     );
@@ -977,16 +1054,15 @@ function BannerManager() {
                      <h2 className="text-xl font-headline font-black text-white uppercase mb-8 border-l-4 border-primary pl-4">Gestão de Banner</h2>
                      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         <div className="space-y-1">
-                           <label className="text-[10px] font-bold uppercase text-primary">Título</label>
+                           <label className="text-[10px] font-bold uppercase text-primary">Título <span className="text-on-surface-variant">(Opcional)</span></label>
                            <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Scania R500" />
                         </div>
                         <div className="space-y-1">
-                           <label className="text-[10px] font-bold uppercase text-primary">URL da Imagem</label>
-                           <input {...register('imageUrl', { required: true })} defaultValue={editing?.imageUrl} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none mb-2" />
-                           <MediaUpload 
-                             label="Ou suba a imagem do banner" 
-                             folder="banners" 
-                             onUpload={(url) => setValue('imageUrl', url)} 
+                           <MediaUpload
+                             label="Imagem do Banner *"
+                             folder="banners"
+                             onUpload={(url) => setValue('imageUrl', url)}
+                             initialUrl={editing?.imageUrl}
                            />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -1008,9 +1084,13 @@ function BannerManager() {
     );
 }
 
-function MediaUpload({ onUpload, label, folder = 'uploads' }: { onUpload: (url: string) => void, label: string, folder?: string }) {
+function MediaUpload({ onUpload, label, folder = 'uploads', initialUrl }: { onUpload: (url: string) => void, label: string, folder?: string, initialUrl?: string }) {
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(initialUrl || null);
+
+  useEffect(() => {
+    setPreview(initialUrl || null);
+  }, [initialUrl]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
