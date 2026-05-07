@@ -3,7 +3,7 @@ import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
-import { Vehicle, Banner, Brand, ContactMessage } from '../types';
+import { Vehicle, Banner, Brand, ContactMessage, AdminUser } from '../types';
 import { Truck, Image, Tag, Settings, Plus, Edit2, Trash2, LayoutDashboard, ChevronRight, Save, X, MessageSquare, Mail, Phone, Loader2, Upload, CheckCircle, Users, MapPin, Calendar, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { format, subDays, startOfDay, isAfter } from 'date-fns';
@@ -19,6 +19,7 @@ export default function Admin() {
     { label: 'Veículos', href: '/admin/veiculos', icon: Truck },
     { label: 'Banners', href: '/admin/banners', icon: Image },
     { label: 'Contatos', href: '/admin/contatos', icon: MessageSquare },
+    { label: 'Usuários', href: '/admin/usuarios', icon: Users },
     { label: 'Configurações', href: '/admin/configuracoes', icon: Settings },
   ];
 
@@ -75,6 +76,7 @@ export default function Admin() {
           <Route path="/veiculos" element={<VehicleManager />} />
           <Route path="/banners" element={<BannerManager />} />
           <Route path="/contatos" element={<ContactManager />} />
+          <Route path="/usuarios" element={<UserManager />} />
           <Route path="/configuracoes" element={<SettingsManager />} />
         </Routes>
       </main>
@@ -525,6 +527,8 @@ function VehicleManager() {
                      </h2>
                      
                      <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* hidden field so setValue('imageUrl') persists to onSubmit data */}
+                        <input type="hidden" {...register('imageUrl', { required: true })} />
                         <div className="space-y-4">
                            <div className="space-y-1">
                               <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Marca*</label>
@@ -945,6 +949,157 @@ function SettingsManager() {
     );
 }
 
+function UserManager() {
+    const [users, setUsers] = useState<AdminUser[]>([]);
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [feedback, setFeedback] = useState<string | null>(null);
+    const { register, handleSubmit, reset } = useForm();
+
+    useEffect(() => { fetchUsers(); }, []);
+
+    async function fetchUsers() {
+        setLoading(true);
+        try {
+            const snap = await getDocs(collection(db, 'adminUsers'));
+            setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminUser)));
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const onSubmit = async (data: any) => {
+        try {
+            await addDoc(collection(db, 'adminUsers'), {
+                username: data.username.trim(),
+                password: data.password,
+                role: 'admin',
+                createdAt: Date.now(),
+            });
+            setFeedback('Usuário adicionado!');
+            setTimeout(() => setFeedback(null), 3000);
+            setIsFormOpen(false);
+            reset();
+            fetchUsers();
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao adicionar usuário.');
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Remover este usuário?')) return;
+        try {
+            await deleteDoc(doc(db, 'adminUsers', id));
+            setFeedback('Usuário removido!');
+            setTimeout(() => setFeedback(null), 3000);
+            fetchUsers();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    return (
+        <div className="space-y-12">
+            <div className="flex justify-between items-end">
+                <div>
+                    <h1 className="text-4xl font-headline font-black text-white uppercase tracking-tighter mb-2">Gestão de Usuários</h1>
+                    <p className="text-on-surface-variant uppercase tracking-widest text-xs font-bold">Usuários com acesso ao painel administrativo.</p>
+                </div>
+                <button
+                    onClick={() => { reset(); setIsFormOpen(true); }}
+                    className="industrial-gradient text-black font-headline font-black uppercase text-xs px-8 py-4 flex items-center gap-3 hover:scale-105 transition-all"
+                >
+                    <Plus size={18} /> Novo Usuário
+                </button>
+            </div>
+
+            {feedback && (
+                <div className="bg-green-500/20 border border-green-500 text-green-500 p-4 font-bold uppercase text-[10px] tracking-widest flex items-center gap-3">
+                    <CheckCircle size={16} /> {feedback}
+                </div>
+            )}
+
+            {loading ? (
+                <div className="flex items-center justify-center py-20">
+                    <Loader2 className="animate-spin text-primary" size={32} />
+                </div>
+            ) : (
+                <div className="bg-surface border border-white/5 overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-background border-b border-white/10">
+                                <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Usuário</th>
+                                <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Perfil</th>
+                                <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Criado em</th>
+                                <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {users.map(u => (
+                                <tr key={u.id} className="hover:bg-white/5 transition-colors">
+                                    <td className="px-6 py-5 font-headline font-bold uppercase text-sm text-white">{u.username}</td>
+                                    <td className="px-6 py-5">
+                                        <span className="text-primary font-bold text-[10px] uppercase tracking-widest">{u.role}</span>
+                                    </td>
+                                    <td className="px-6 py-5 text-on-surface-variant text-xs">
+                                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR') : '—'}
+                                    </td>
+                                    <td className="px-6 py-5 text-right">
+                                        <button onClick={() => handleDelete(u.id)} className="text-red-500 hover:text-red-400 transition-colors"><Trash2 size={18} /></button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {users.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-16 text-center text-on-surface-variant text-xs uppercase tracking-widest font-bold">
+                                        Nenhum usuário cadastrado. Adicione o primeiro usuário acima.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {isFormOpen && (
+                <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6">
+                    <div className="bg-surface w-full max-w-md p-10 border border-white/10 relative">
+                        <button onClick={() => setIsFormOpen(false)} className="absolute top-6 right-6 text-primary"><X /></button>
+                        <h2 className="text-xl font-headline font-black text-white uppercase mb-8 border-l-4 border-primary pl-4">Novo Usuário</h2>
+                        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Usuário</label>
+                                <input
+                                    {...register('username', { required: true })}
+                                    className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder="nome de usuário"
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Senha</label>
+                                <input
+                                    type="password"
+                                    {...register('password', { required: true })}
+                                    className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder="senha segura"
+                                    autoComplete="new-password"
+                                />
+                            </div>
+                            <button type="submit" className="w-full industrial-gradient text-black py-4 font-headline font-black uppercase tracking-widest hover:scale-[1.02] transition-all">
+                                Adicionar Usuário
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function BannerManager() {
     const [banners, setBanners] = useState<Banner[]>([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -1053,10 +1208,14 @@ function BannerManager() {
                      <button onClick={() => setIsFormOpen(false)} className="absolute top-6 right-6 text-primary"><X /></button>
                      <h2 className="text-xl font-headline font-black text-white uppercase mb-8 border-l-4 border-primary pl-4">Gestão de Banner</h2>
                      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                        {/* hidden field so setValue('imageUrl') persists to onSubmit data */}
+                        <input type="hidden" {...register('imageUrl', { required: true })} />
+
                         <div className="space-y-1">
-                           <label className="text-[10px] font-bold uppercase text-primary">Título <span className="text-on-surface-variant">(Opcional)</span></label>
-                           <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Scania R500" />
+                           <label className="text-[10px] font-bold uppercase text-primary">Rótulo Interno <span className="text-on-surface-variant">(Opcional)</span></label>
+                           <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Banner Scania – Junho" />
                         </div>
+
                         <div className="space-y-1">
                            <MediaUpload
                              label="Imagem do Banner *"
@@ -1065,16 +1224,35 @@ function BannerManager() {
                              initialUrl={editing?.imageUrl}
                            />
                         </div>
+
+                        <p className="text-[10px] font-bold uppercase text-on-surface-variant tracking-widest pt-2 border-t border-white/5">Texto sobre a imagem (todos opcionais)</p>
+
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-bold uppercase text-primary">Headline</label>
+                           <input {...register('headline')} defaultValue={editing?.headline} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Potência & Tradição" />
+                        </div>
+
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-bold uppercase text-primary">Subheadline</label>
+                           <input {...register('subheadline')} defaultValue={editing?.subheadline} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Os melhores caminhões do mercado" />
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold uppercase text-primary">Ordem</label>
-                              <input type="number" {...register('order')} defaultValue={editing?.order} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" />
+                              <label className="text-[10px] font-bold uppercase text-primary">Texto do Botão</label>
+                              <input {...register('buttonText')} defaultValue={editing?.buttonText} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Ver Estoque" />
                            </div>
                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold uppercase text-primary">Link (Opcional)</label>
+                              <label className="text-[10px] font-bold uppercase text-primary">Link do Botão</label>
                               <input {...register('link')} defaultValue={editing?.link} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="/estoque" />
                            </div>
                         </div>
+
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-bold uppercase text-primary">Ordem</label>
+                           <input type="number" {...register('order')} defaultValue={editing?.order ?? 1} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" />
+                        </div>
+
                         <button type="submit" className="w-full industrial-gradient text-black py-4 font-headline font-black uppercase tracking-widest hover:scale-[1.02] transition-all">Salvar</button>
                      </form>
                   </div>

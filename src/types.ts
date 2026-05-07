@@ -30,9 +30,20 @@ export interface ContactMessage {
 export interface Banner {
   id: string;
   imageUrl: string;
-  title: string;
-  link: string;
+  title?: string;
+  headline?: string;
+  subheadline?: string;
+  buttonText?: string;
+  link?: string;
   order: number;
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  password: string;
+  role: string;
+  createdAt: number;
 }
 
 export interface Brand {

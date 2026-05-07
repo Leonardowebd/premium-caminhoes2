@@ -24,26 +24,50 @@ export default function Login() {
     setError('');
     setLoading(true);
 
-    let validUsername = DEFAULT_USERNAME;
-    let validPassword = DEFAULT_PASSWORD;
-
     try {
-      const snap = await getDocs(collection(db, 'settings'));
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
+      // Check adminUsers collection first (multi-user support)
+      const usersSnap = await getDocs(collection(db, 'adminUsers'));
+      if (!usersSnap.empty) {
+        const match = usersSnap.docs.find(d => {
+          const u = d.data();
+          return u.username === username && u.password === password;
+        });
+        if (match) {
+          localStorage.setItem('admin_auth', 'true');
+          window.location.href = '/admin';
+          return;
+        }
+        setError('Credenciais inválidas.');
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: check settings doc (legacy single-user)
+      const settingsSnap = await getDocs(collection(db, 'settings'));
+      let validUsername = DEFAULT_USERNAME;
+      let validPassword = DEFAULT_PASSWORD;
+      if (!settingsSnap.empty) {
+        const data = settingsSnap.docs[0].data();
         if (data.adminUsername) validUsername = data.adminUsername;
         if (data.adminPassword) validPassword = data.adminPassword;
       }
-    } catch {
-      // Firestore unavailable — use defaults
-    }
 
-    if (username === validUsername && password === validPassword) {
-      localStorage.setItem('admin_auth', 'true');
-      window.location.href = '/admin';
-    } else {
-      setError('Credenciais inválidas.');
-      setLoading(false);
+      if (username === validUsername && password === validPassword) {
+        localStorage.setItem('admin_auth', 'true');
+        window.location.href = '/admin';
+      } else {
+        setError('Credenciais inválidas.');
+        setLoading(false);
+      }
+    } catch {
+      // Firestore unavailable — use hardcoded defaults
+      if (username === DEFAULT_USERNAME && password === DEFAULT_PASSWORD) {
+        localStorage.setItem('admin_auth', 'true');
+        window.location.href = '/admin';
+      } else {
+        setError('Credenciais inválidas.');
+        setLoading(false);
+      }
     }
   };
 

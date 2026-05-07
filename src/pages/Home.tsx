@@ -121,31 +121,42 @@ export default function Home() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
             
-            {/* Banner Content */}
-            <div className="absolute inset-0 flex items-center">
-              <div className="container mx-auto px-6">
-                <motion.div
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="max-w-2xl"
-                >
-                  <h1 className="text-4xl sm:text-6xl lg:text-8xl font-headline font-black text-white uppercase tracking-tighter leading-[0.9] mb-6 italic">
-                    {displayBanners[currentSlide]?.title.split(' ').map((word, i) => (
-                      <span key={i} className={i % 2 !== 0 ? "text-primary" : ""}>{word} </span>
-                    ))}
-                  </h1>
-                  <div className="flex flex-wrap gap-4 mt-8">
-                    <Link 
-                      to="/estoque" 
-                      className="industrial-gradient text-black px-8 sm:px-12 py-4 sm:py-5 font-headline font-black uppercase tracking-widest text-xs sm:text-sm hover:scale-105 transition-all shadow-2xl shadow-primary/20"
-                    >
-                      Ver Estoque
-                    </Link>
-                  </div>
-                </motion.div>
+            {/* Banner Content — only renders if any text field is set */}
+            {(displayBanners[currentSlide]?.headline || displayBanners[currentSlide]?.subheadline || displayBanners[currentSlide]?.buttonText) && (
+              <div className="absolute inset-0 flex items-center">
+                <div className="container mx-auto px-6">
+                  <motion.div
+                    initial={{ opacity: 0, x: -30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="max-w-2xl"
+                  >
+                    {displayBanners[currentSlide]?.headline && (
+                      <h1 className="text-4xl sm:text-6xl lg:text-8xl font-headline font-black text-white uppercase tracking-tighter leading-[0.9] mb-4 italic">
+                        {displayBanners[currentSlide].headline!.split(' ').map((word, i) => (
+                          <span key={i} className={i % 2 !== 0 ? "text-primary" : ""}>{word} </span>
+                        ))}
+                      </h1>
+                    )}
+                    {displayBanners[currentSlide]?.subheadline && (
+                      <p className="text-white/80 text-lg sm:text-xl font-headline mb-6">
+                        {displayBanners[currentSlide].subheadline}
+                      </p>
+                    )}
+                    {displayBanners[currentSlide]?.buttonText && (
+                      <div className="flex flex-wrap gap-4 mt-8">
+                        <Link
+                          to={displayBanners[currentSlide]?.link || '/estoque'}
+                          className="industrial-gradient text-black px-8 sm:px-12 py-4 sm:py-5 font-headline font-black uppercase tracking-widest text-xs sm:text-sm hover:scale-105 transition-all shadow-2xl shadow-primary/20"
+                        >
+                          {displayBanners[currentSlide].buttonText}
+                        </Link>
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
         </AnimatePresence>
 
