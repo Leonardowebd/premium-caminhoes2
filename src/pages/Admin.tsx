@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { uploadImage } from '../lib/upload';
 import { Vehicle, Banner, Brand, ContactMessage, AdminUser } from '../types';
 import { Truck, Image, Tag, Settings, Plus, Edit2, Trash2, LayoutDashboard, ChevronRight, Save, X, MessageSquare, Mail, Phone, Loader2, Upload, CheckCircle, Users, MapPin, Calendar, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
@@ -407,8 +407,9 @@ function VehicleManager() {
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
     const [loading, setLoading] = useState(true);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [mainImageUrl, setMainImageUrl] = useState('');
     const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
-    const { register, handleSubmit, reset, setValue, getValues, control } = useForm();
+    const { register, handleSubmit, reset, control } = useForm();
 
     useEffect(() => {
         fetchVehicles();
@@ -422,8 +423,13 @@ function VehicleManager() {
     }
 
     const onSubmit = async (data: any) => {
+        if (!mainImageUrl) {
+            alert('Selecione a imagem principal do veículo.');
+            return;
+        }
         const docData = {
             ...data,
+            imageUrl: mainImageUrl,
             price: Number(data.price),
             year: Number(data.year),
             kilometers: Number(data.kilometers),
@@ -432,7 +438,6 @@ function VehicleManager() {
             updatedAt: serverTimestamp(),
             createdAt: editingVehicle ? editingVehicle.createdAt : Date.now()
         };
-        delete (docData as any).galleryString;
 
         try {
             if (editingVehicle) {
@@ -445,16 +450,19 @@ function VehicleManager() {
             setIsFormOpen(false);
             setEditingVehicle(null);
             reset();
+            setMainImageUrl('');
+            setGalleryUrls([]);
             fetchVehicles();
         } catch (err) {
             console.error(err);
-            alert("Erro ao salvar veículo.");
+            alert('Erro ao salvar veículo.');
         }
     };
 
     const handleEdit = (v: Vehicle) => {
         setEditingVehicle(v);
         reset({ ...v });
+        setMainImageUrl(v.imageUrl || '');
         setGalleryUrls(v.gallery || []);
         setIsFormOpen(true);
     };
@@ -475,7 +483,7 @@ function VehicleManager() {
                    <p className="text-on-surface-variant uppercase tracking-widest text-xs font-bold">Adicione e gerencie o estoque premium.</p>
                 </div>
                 <button
-                  onClick={() => { setEditingVehicle(null); reset(); setGalleryUrls([]); setIsFormOpen(true); }}
+                  onClick={() => { setEditingVehicle(null); reset(); setMainImageUrl(''); setGalleryUrls([]); setIsFormOpen(true); }}
                   className="industrial-gradient text-black font-headline font-black uppercase text-xs tracking-widest px-8 py-4 flex items-center gap-3 hover:scale-105 transition-all"
                 >
                    <Plus size={18} /> Novo Veículo
@@ -527,8 +535,6 @@ function VehicleManager() {
                      </h2>
                      
                      <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* hidden field so setValue('imageUrl') persists to onSubmit data */}
-                        <input type="hidden" {...register('imageUrl', { required: true })} />
                         <div className="space-y-4">
                            <div className="space-y-1">
                               <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Marca*</label>
@@ -581,29 +587,29 @@ function VehicleManager() {
                                  />
                               </div>
                            </div>
-                           <div className="space-y-1">
-                              <MediaUpload
-                                label="Imagem Principal *"
-                                folder="vehicles"
-                                onUpload={(url) => setValue('imageUrl', url)}
-                                initialUrl={editingVehicle?.imageUrl}
-                              />
-                           </div>
-                           <div className="space-y-1">
-                              <MediaUpload
+                           <ImagePicker
+                              label="Imagem Principal"
+                              folder="vehicles"
+                              value={mainImageUrl}
+                              onChange={setMainImageUrl}
+                              required
+                           />
+                           <div className="space-y-2">
+                              <ImagePicker
                                 label="Adicionar à Galeria"
                                 folder="vehicles/gallery"
-                                onUpload={(url) => setGalleryUrls(prev => [...prev, url])}
+                                value=""
+                                onChange={(url) => { if (url) setGalleryUrls(prev => [...prev, url]); }}
                               />
                               {galleryUrls.length > 0 && (
-                                <div className="mt-3 grid grid-cols-4 gap-2">
+                                <div className="grid grid-cols-4 gap-2 mt-2">
                                   {galleryUrls.map((url, idx) => (
-                                    <div key={idx} className="relative group">
-                                      <img src={url} alt="" className="w-full aspect-square object-cover" />
+                                    <div key={idx} className="relative group aspect-square">
+                                      <img src={url} alt="" className="w-full h-full object-cover" />
                                       <button
                                         type="button"
                                         onClick={() => setGalleryUrls(prev => prev.filter((_, i) => i !== idx))}
-                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold"
                                       >×</button>
                                     </div>
                                   ))}
@@ -791,7 +797,8 @@ function SettingsManager() {
     const [credFeedback, setCredFeedback] = useState<string | null>(null);
     const [newUsername, setNewUsername] = useState('');
     const [newPassword, setNewPassword] = useState('');
-    const { register, handleSubmit, setValue, getValues } = useForm();
+    const [logoUrl, setLogoUrl] = useState('');
+    const { handleSubmit } = useForm();
 
     useEffect(() => {
         fetchSettings();
@@ -804,7 +811,7 @@ function SettingsManager() {
             if (!snap.empty) {
                 const data = snap.docs[0].data();
                 setSettings({ id: snap.docs[0].id, ...data });
-                setValue('logoUrl', data.logoUrl);
+                setLogoUrl(data.logoUrl || '');
             }
         } catch (err) {
             console.error(err);
@@ -813,8 +820,9 @@ function SettingsManager() {
         }
     };
 
-    const onSubmit = async (data: any) => {
+    const onSubmit = async () => {
         try {
+            const data = { logoUrl };
             if (settings) {
                 await updateDoc(doc(db, 'settings', settings.id), data);
             } else {
@@ -872,29 +880,13 @@ function SettingsManager() {
 
             <div className="bg-surface p-10 border border-white/5 max-w-2xl">
                <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-                  <div className="space-y-4">
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-primary tracking-widest">URL do Logotipo</label>
-                        <input 
-                           {...register('logoUrl')} 
-                           className="w-full bg-[#2a2a2a] border-none text-white py-4 px-6 outline-none mb-4" 
-                           placeholder="https://sua-logo.com/logo.png"
-                        />
-                        <MediaUpload 
-                          label="Ou suba o logotipo" 
-                          folder="settings" 
-                          onUpload={(url) => setValue('logoUrl', url)} 
-                        />
-                        <p className="text-[10px] text-on-surface-variant mt-2 italic">Recomendado: Fundo transparente (PNG), altura mínima de 128px.</p>
-                     </div>
-                  </div>
-                  
-                  {settings?.logoUrl && (
-                      <div className="p-4 bg-background border border-white/5 inline-block">
-                         <p className="text-[10px] font-bold text-primary uppercase mb-4 tracking-widest">Pré-visualização:</p>
-                         <img src={settings.logoUrl} alt="Logo Preview" className="h-20 object-contain" />
-                      </div>
-                  )}
+                  <ImagePicker
+                     label="Logotipo do Site"
+                     folder="settings"
+                     value={logoUrl}
+                     onChange={setLogoUrl}
+                  />
+                  <p className="text-[10px] text-on-surface-variant italic">Recomendado: PNG com fundo transparente, mínimo 128px de altura.</p>
 
                   <button type="submit" className="industrial-gradient text-black px-12 py-5 font-headline font-black uppercase tracking-widest text-sm hover:scale-105 transition-all shadow-xl shadow-primary/20">
                      Salvar Alterações
@@ -1106,8 +1098,9 @@ function BannerManager() {
     const [editing, setEditing] = useState<Banner | null>(null);
     const [loading, setLoading] = useState(true);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [bannerImageUrl, setBannerImageUrl] = useState('');
 
-    const { register, handleSubmit, reset, setValue } = useForm();
+    const { register, handleSubmit, reset } = useForm();
 
     useEffect(() => {
         fetchBanners();
@@ -1126,7 +1119,11 @@ function BannerManager() {
     }
 
     const onSubmit = async (data: any) => {
-        const docData = { ...data, order: Number(data.order) };
+        if (!bannerImageUrl) {
+            alert('Selecione uma imagem para o banner.');
+            return;
+        }
+        const docData = { ...data, imageUrl: bannerImageUrl, order: Number(data.order) || 1 };
         try {
             if (editing) {
                 await updateDoc(doc(db, 'banners', editing.id), docData);
@@ -1137,6 +1134,7 @@ function BannerManager() {
             setTimeout(() => setFeedback(null), 3000);
             setIsFormOpen(false);
             setEditing(null);
+            setBannerImageUrl('');
             reset();
             fetchBanners();
         } catch (err) {
@@ -1164,7 +1162,7 @@ function BannerManager() {
                    <h1 className="text-4xl font-headline font-black text-white uppercase tracking-tighter mb-2">Banners Hero</h1>
                    <p className="text-on-surface-variant uppercase tracking-widest text-xs font-bold">Gerencie os slides da home page.</p>
                 </div>
-                <button onClick={() => {setEditing(null); reset(); setIsFormOpen(true);}} className="industrial-gradient text-black font-headline font-black uppercase text-xs px-8 py-4 flex items-center gap-3 transition-all transform hover:scale-105"><Plus size={18} /> Novo Banner</button>
+                <button onClick={() => { setEditing(null); reset(); setBannerImageUrl(''); setIsFormOpen(true); }} className="industrial-gradient text-black font-headline font-black uppercase text-xs px-8 py-4 flex items-center gap-3 transition-all transform hover:scale-105"><Plus size={18} /> Novo Banner</button>
             </div>
 
             {feedback && (
@@ -1184,7 +1182,7 @@ function BannerManager() {
                       <div className="aspect-video relative overflow-hidden">
                           <img src={b.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                            <button onClick={() => {setEditing(b); setIsFormOpen(true);}} className="bg-white text-black p-3 rounded-full hover:bg-primary transition-colors"><Edit2 size={20}/></button>
+                            <button onClick={() => { setEditing(b); setBannerImageUrl(b.imageUrl || ''); setIsFormOpen(true); }} className="bg-white text-black p-3 rounded-full hover:bg-primary transition-colors"><Edit2 size={20}/></button>
                             <button onClick={() => handleDelete(b.id)} className="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors"><Trash2 size={20}/></button>
                           </div>
                       </div>
@@ -1208,22 +1206,18 @@ function BannerManager() {
                      <button onClick={() => setIsFormOpen(false)} className="absolute top-6 right-6 text-primary"><X /></button>
                      <h2 className="text-xl font-headline font-black text-white uppercase mb-8 border-l-4 border-primary pl-4">Gestão de Banner</h2>
                      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                        {/* hidden field so setValue('imageUrl') persists to onSubmit data */}
-                        <input type="hidden" {...register('imageUrl', { required: true })} />
-
                         <div className="space-y-1">
                            <label className="text-[10px] font-bold uppercase text-primary">Rótulo Interno <span className="text-on-surface-variant">(Opcional)</span></label>
                            <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Banner Scania – Junho" />
                         </div>
 
-                        <div className="space-y-1">
-                           <MediaUpload
-                             label="Imagem do Banner *"
-                             folder="banners"
-                             onUpload={(url) => setValue('imageUrl', url)}
-                             initialUrl={editing?.imageUrl}
-                           />
-                        </div>
+                        <ImagePicker
+                           label="Imagem do Banner"
+                           folder="banners"
+                           value={bannerImageUrl}
+                           onChange={setBannerImageUrl}
+                           required
+                        />
 
                         <p className="text-[10px] font-bold uppercase text-on-surface-variant tracking-widest pt-2 border-t border-white/5">Texto sobre a imagem (todos opcionais)</p>
 
@@ -1262,70 +1256,86 @@ function BannerManager() {
     );
 }
 
-function MediaUpload({ onUpload, label, folder = 'uploads', initialUrl }: { onUpload: (url: string) => void, label: string, folder?: string, initialUrl?: string }) {
+function ImagePicker({
+  label,
+  folder,
+  value,
+  onChange,
+  required = false,
+}: {
+  label: string;
+  folder: string;
+  value: string;
+  onChange: (url: string) => void;
+  required?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(initialUrl || null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setPreview(initialUrl || null);
-  }, [initialUrl]);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
+    setError(null);
     setUploading(true);
-    try {
-      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setPreview(url);
-      onUpload(url);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao fazer upload da imagem.');
-    } finally {
-      setUploading(false);
+    const result = await uploadImage(file, folder);
+    setUploading(false);
+    if (result.ok) {
+      onChange(result.url);
+    } else {
+      setError(result.error);
     }
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   return (
-    <div className="space-y-1">
-      <label className="text-[10px] font-bold uppercase text-primary tracking-widest block mb-2">{label}</label>
-      <div className="flex gap-4">
-        {preview && (
-          <div className="w-12 h-12 border border-primary/30 p-1 flex items-center justify-center bg-background shrink-0">
-            <img src={preview} alt="Upload preview" className="w-full h-full object-cover" />
-          </div>
-        )}
-        <div className="relative group flex-grow">
-          <input 
-            type="file" 
-            onChange={handleFileChange} 
-            accept="image/*"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            disabled={uploading}
-          />
-          <div className="bg-[#2a2a2a] py-3 px-4 border border-dashed border-white/10 flex items-center justify-center gap-2 text-on-surface-variant group-hover:border-primary transition-all h-full min-h-[48px]">
-            {uploading ? (
-              <>
-                <Loader2 size={16} className="animate-spin text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Enviando...</span>
-              </>
-            ) : preview ? (
-              <>
-                <CheckCircle size={16} className="text-green-500" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-green-500">Mídia Pronta</span>
-              </>
-            ) : (
-              <>
-                <Upload size={16} className="group-hover:text-primary transition-colors" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Escolher Mídia</span>
-              </>
-            )}
-          </div>
+    <div className="space-y-2">
+      <label className="text-[10px] font-bold uppercase text-primary tracking-widest block">
+        {label}{required && <span className="text-red-400 ml-1">*</span>}
+      </label>
+
+      {value && (
+        <div className="relative w-full aspect-video bg-background border border-white/10 overflow-hidden">
+          <img src={value} alt="preview" className="w-full h-full object-cover" />
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="absolute top-2 right-2 bg-black/70 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-red-600 transition-colors text-xs font-bold"
+          >×</button>
         </div>
-      </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        disabled={uploading}
+        className="hidden"
+        id={`picker-${folder}-${label}`}
+      />
+      <label
+        htmlFor={`picker-${folder}-${label}`}
+        className={`flex items-center justify-center gap-3 py-4 px-6 border border-dashed cursor-pointer transition-all font-headline font-bold uppercase text-[10px] tracking-widest select-none ${
+          uploading
+            ? 'border-primary/40 text-primary/60 cursor-not-allowed'
+            : 'border-white/20 text-on-surface-variant hover:border-primary hover:text-primary'
+        }`}
+      >
+        {uploading ? (
+          <><Loader2 size={14} className="animate-spin" /> Enviando...</>
+        ) : value ? (
+          <><Upload size={14} /> Trocar imagem</>
+        ) : (
+          <><Upload size={14} /> Selecionar imagem</>
+        )}
+      </label>
+
+      {error && (
+        <p className="text-red-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+          <span>⚠</span> {error}
+        </p>
+      )}
     </div>
   );
 }
