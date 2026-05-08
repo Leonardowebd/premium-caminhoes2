@@ -228,21 +228,72 @@ Retorne APENAS a palavra.` }] }],
   }
 }
 
+const EMPTY_VEHICLE = { brand: '', model: '', year: '', price: '', km: '', transmission: '', power: '', traction: '', description: '' };
+
+function regexExtract(text: string): Record<string, string> {
+  const up = text.toUpperCase();
+  const BRANDS: Record<string, string> = {
+    SCANIA: 'Scania', VOLVO: 'Volvo', MERCEDES: 'Mercedes-Benz',
+    DAF: 'DAF', MAN: 'MAN', IVECO: 'Iveco', FORD: 'Ford',
+    VOLKSWAGEN: 'Volkswagen', VW: 'Volkswagen', AGRALE: 'Agrale',
+  };
+  const brandKey = Object.keys(BRANDS).find(k => up.includes(k)) || '';
+  const brand = BRANDS[brandKey] || '';
+
+  let model = '';
+  if (brandKey) {
+    const mm = text.match(new RegExp(brandKey + '\\s+([\\w./ ]+?)(?:[,\\n*]|$)', 'i'));
+    if (mm) model = mm[1].trim().split(/\s+/).slice(0, 4).join(' ');
+  }
+
+  // year: handles "1997/98" or "2020" etc.
+  const yearMatch = text.match(/\b(19[5-9]\d|20[0-2]\d)(?:\/\d{2,4})?\b/);
+  const year = yearMatch?.[1] || '';
+
+  // price: R$ 172.000,00 or 172000 or 172.000
+  const priceMatch = text.match(/R\$\s*[\s]*([\d.,]+)/i) || text.match(/\b(\d{3}[.,]\d{3}(?:[.,]\d{2})?)\b/);
+  const price = priceMatch ? priceMatch[1].replace(/[.,\s]/g, '').replace(/[^\d]/g, '') : '';
+
+  // km
+  const kmMatch = text.match(/([\d.,]+)\s*km/i);
+  const km = kmMatch ? kmMatch[1].replace(/[.,]/g, '') : '';
+
+  const transmission = /autom[aá]t/i.test(text) ? 'Automático' : /manual|\d+\s*march/i.test(text) ? 'Manual' : '';
+
+  const tractionMatch = text.match(/\b(\d[xX]\d)\b/);
+  const traction = tractionMatch?.[1] || '';
+
+  return { ...EMPTY_VEHICLE, brand, model, year, price, km, transmission, traction };
+}
+
 async function parseVehicleFromText(text: string): Promise<Record<string, string>> {
   try {
     const r = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts: [{ text: `Extraia dados de veículo e retorne JSON. Use "" para não encontrados.
-Campos: brand, model, year (número), price (número sem formatação), km (número), transmission, power, traction, description
+      contents: [{ role: 'user', parts: [{ text: `Extraia dados de veículo do texto e retorne JSON puro sem markdown.
+Use "" para campos não encontrados. Campos obrigatórios: brand, model, year, price, km, transmission, power, traction, description.
+year e price e km devem ser só dígitos (ex: year="1997", price="172000", km="").
 
-Mensagem: "${text}"
-Retorne APENAS JSON válido sem markdown.` }] }],
+Texto: "${text}"` }] }],
     });
     const raw = (r.text ?? '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
-    return JSON.parse(m?.[0] || raw);
+    const parsed = JSON.parse(m?.[0] || raw);
+    // Normalize: null → '', numbers → string
+    const normalized: Record<string, string> = {};
+    for (const k of Object.keys(EMPTY_VEHICLE)) {
+      const v = parsed[k];
+      normalized[k] = v == null ? '' : String(v);
+    }
+    // Blend with regex if Gemini got < 2 required fields
+    const filled = REQUIRED_FIELDS.filter(f => normalized[f] !== '').length;
+    if (filled < 2) {
+      const regex = regexExtract(text);
+      return { ...regex, ...Object.fromEntries(Object.entries(normalized).filter(([, v]) => v !== '')) };
+    }
+    return normalized;
   } catch {
-    return { brand: '', model: '', year: '', price: '', km: '', transmission: '', power: '', traction: '', description: '' };
+    return regexExtract(text);
   }
 }
 
