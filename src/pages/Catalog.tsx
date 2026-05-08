@@ -34,7 +34,7 @@ export default function Catalog() {
       try {
         const q = query(collection(db, 'vehicles'), orderBy('createdAt', 'desc'));
         const snap = await getDocs(q);
-        setVehicles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle)));
+        setVehicles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle)).filter(v => !v.sold));
       } catch (err) {
         console.error(err);
       } finally {
@@ -64,7 +64,7 @@ export default function Catalog() {
       <section className="py-12 bg-surface/30 border-b border-white/5">
         <div className="container mx-auto px-6">
           <h1 className="text-3xl sm:text-5xl lg:text-7xl font-headline font-black text-white uppercase tracking-tighter mb-4">
-            Estoque <span className="text-primary italic">Premium</span>
+            Nossa <span className="text-primary italic">Frota</span>
           </h1>
           <p className="text-on-surface-variant uppercase tracking-[0.3em] font-bold text-sm">
             Explorando {filteredVehicles.length} máquinas de alto desempenho

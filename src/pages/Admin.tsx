@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { db } from '../lib/firebase';
 import { uploadImage } from '../lib/upload';
 import { Vehicle, Banner, Brand, ContactMessage, AdminUser } from '../types';
-import { Truck, Image, Tag, Settings, Plus, Edit2, Trash2, LayoutDashboard, ChevronRight, Save, X, MessageSquare, Mail, Phone, Loader2, Upload, CheckCircle, Users, MapPin, Calendar, TrendingUp, Play, Volume2, VolumeX } from 'lucide-react';
+import { Truck, Image, Tag, Settings, Plus, Edit2, Trash2, LayoutDashboard, ChevronRight, Save, X, MessageSquare, Mail, Phone, Loader2, Upload, CheckCircle, Users, MapPin, Calendar, TrendingUp, Play, Volume2, VolumeX, CheckSquare, Square } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { format, subDays, startOfDay, isAfter } from 'date-fns';
 import { motion } from 'motion/react';
@@ -434,6 +434,7 @@ function VehicleManager() {
             year: Number(data.year),
             kilometers: Number(data.kilometers),
             isFeatured: !!data.isFeatured,
+            sold: !!data.sold,
             gallery: galleryUrls,
             updatedAt: serverTimestamp(),
             createdAt: editingVehicle ? editingVehicle.createdAt : Date.now()
@@ -475,6 +476,11 @@ function VehicleManager() {
         fetchVehicles();
     };
 
+    const toggleSold = async (v: Vehicle) => {
+        await updateDoc(doc(db, 'vehicles', v.id), { sold: !v.sold });
+        setVehicles(prev => prev.map(x => x.id === v.id ? { ...x, sold: !x.sold } : x));
+    };
+
     return (
         <div className="space-y-12">
             <div className="flex justify-between items-end">
@@ -503,6 +509,7 @@ function VehicleManager() {
                         <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Marca / Modelo</th>
                         <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Preço</th>
                         <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Destaque</th>
+                        <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary">Vendido</th>
                         <th className="px-6 py-4 font-headline uppercase text-xs tracking-widest text-primary text-right">Ações</th>
                      </tr>
                   </thead>
@@ -515,6 +522,18 @@ function VehicleManager() {
                            <td className="px-6 py-6 font-headline font-bold text-lg text-primary">{formatCurrency(v.price)}</td>
                            <td className="px-6 py-6">
                               {v.isFeatured ? <span className="text-green-500 font-bold text-[10px] uppercase tracking-widest">Sim</span> : <span className="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Não</span>}
+                           </td>
+                           <td className="px-6 py-6">
+                              <button
+                                onClick={() => toggleSold(v)}
+                                className={cn(
+                                  "flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest transition-colors",
+                                  v.sold ? "text-red-400 hover:text-red-300" : "text-on-surface-variant hover:text-white"
+                                )}
+                              >
+                                {v.sold ? <CheckSquare size={16} /> : <Square size={16} />}
+                                {v.sold ? 'Vendido' : 'Disponível'}
+                              </button>
                            </td>
                            <td className="px-6 py-6 text-right space-x-4">
                               <button onClick={() => handleEdit(v)} className="text-primary hover:text-white transition-colors"><Edit2 size={18} /></button>
@@ -675,6 +694,10 @@ function VehicleManager() {
                            <div className="flex items-center gap-3 py-2">
                               <input type="checkbox" {...register('isFeatured')} defaultChecked={editingVehicle?.isFeatured} id="isFeatured" className="w-5 h-5 accent-primary" />
                               <label htmlFor="isFeatured" className="text-xs uppercase font-bold text-white cursor-pointer tracking-widest">Destacar na Home</label>
+                           </div>
+                           <div className="flex items-center gap-3 py-2">
+                              <input type="checkbox" {...register('sold')} defaultChecked={editingVehicle?.sold} id="sold" className="w-5 h-5 accent-red-500" />
+                              <label htmlFor="sold" className="text-xs uppercase font-bold text-red-400 cursor-pointer tracking-widest">Marcar como Vendido</label>
                            </div>
                         </div>
 

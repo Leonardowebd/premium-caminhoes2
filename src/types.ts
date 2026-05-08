@@ -13,6 +13,7 @@ export interface Vehicle {
   videoUrl?: string;
   description: string;
   isFeatured: boolean;
+  sold?: boolean;
   type: string;
   createdAt: number;
 }

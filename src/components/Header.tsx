@@ -49,7 +49,7 @@ export default function Header() {
   const isAdminPage = location.pathname.startsWith('/admin');
 
   const navLinks = [
-    { label: 'Estoque', href: '/estoque' },
+    { label: 'Nossa Frota', href: '/estoque' },
     { label: 'Sobre Nós', href: '/sobre-nos' },
     { label: 'Contato', href: '/contato' },
   ];

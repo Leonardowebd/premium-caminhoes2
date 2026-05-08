@@ -97,7 +97,7 @@ export default function Home() {
         const vehiclesSnap = await getDocs(vehiclesQuery);
         const vAllData = vehiclesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle));
         setAllVehicles(vAllData);
-        setVehicles(vAllData.filter(v => v.isFeatured).slice(0, 4));
+        setVehicles(vAllData.filter(v => v.isFeatured && !v.sold).slice(0, 4));
 
         const bannersSnap = await getDocs(collection(db, 'banners'));
         const bData = bannersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Banner)).sort((a, b) => a.order - b.order);
