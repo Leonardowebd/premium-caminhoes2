@@ -134,8 +134,8 @@ export default function Home() {
               const vidId = extractYouTubeId(displayBanners[currentSlide].videoUrl!);
               return vidId ? (
                 <iframe
-                  src={`https://www.youtube.com/embed/${vidId}?autoplay=1&loop=1&controls=0&showinfo=0&modestbranding=1&mute=${bannerVideoMuted ? 1 : 0}&playlist=${vidId}&rel=0&disablekb=1&iv_load_policy=3`}
-                  allow="autoplay; encrypted-media"
+                  src={`https://www.youtube.com/embed/${vidId}?autoplay=1&loop=1&controls=0&showinfo=0&modestbranding=1&mute=${bannerVideoMuted ? 1 : 0}&playlist=${vidId}&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0`}
+                  allow="autoplay; encrypted-media; fullscreen"
                   style={{
                     position: 'absolute',
                     top: '50%',
