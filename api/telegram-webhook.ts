@@ -40,8 +40,15 @@ async function send(chatId: number, text: string) {
 async function downloadTelegramFile(fileId: string): Promise<Buffer> {
   const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`);
   const j: any = await r.json();
+  if (!j.ok) {
+    const desc: string = j.description || '';
+    if (desc.toLowerCase().includes('too big') || desc.includes('FILE_TOO_BIG')) {
+      throw new Error('Vídeo muito grande para o Telegram Bot API (limite 20MB). Comprima o vídeo antes de enviar.');
+    }
+    throw new Error(`Telegram API erro: ${desc}`);
+  }
   const filePath = j.result?.file_path;
-  if (!filePath) throw new Error('Telegram getFile falhou');
+  if (!filePath) throw new Error('Telegram não retornou caminho do arquivo — provavelmente maior que 20MB.');
   const res = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`);
   return Buffer.from(await res.arrayBuffer());
 }
