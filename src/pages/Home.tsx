@@ -116,10 +116,6 @@ export default function Home() {
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % displayBanners.length);
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + displayBanners.length) % displayBanners.length);
 
-  useEffect(() => {
-    const timer = setInterval(nextSlide, 5000);
-    return () => clearInterval(timer);
-  }, [displayBanners.length]);
 
   return (
     <div className="bg-transparent">
