@@ -288,8 +288,8 @@ const QUESTIONS: Record<string, string> = {
 
 const PHOTOS_QUESTION =
   `📸 *Envie as fotos e/ou vídeos do veículo.*\n\n` +
-  `• Pode enviar várias fotos\n` +
-  `• Pode enviar vídeos (mp4, até 50MB)\n\n` +
+  `• Pode enviar várias fotos de uma vez\n` +
+  `• Pode enviar vídeos (mp4, até 20MB)\n\n` +
   `Quando terminar: *"ok"*\nSem mídia: *"pular"*`;
 
 function nextMissingField(data: Record<string, any>): string | null {
@@ -333,10 +333,10 @@ async function handleMediaUpload(
   publicId: string,
   type: 'image' | 'video',
   captionText: string,
+  mediaGroupId?: string,
 ) {
   const session = await getSession(chatId);
 
-  // Start with existing session data (or empty if no session)
   let data: Record<string, any> = session?.data || {};
   const step: string = session?.step || '';
 
@@ -347,8 +347,11 @@ async function handleMediaUpload(
     data = { ...data, videoUrl: url, videoPublicIds: [...(data.videoPublicIds || []), publicId] };
   }
 
-  // Parse caption BEFORE any session logic — merge extracted fields into data
-  if (captionText) {
+  // Detect if this photo belongs to same album already being accumulated
+  const sameGroup = mediaGroupId && data._mediaGroupId === mediaGroupId;
+
+  // Parse caption BEFORE any session logic (only on first photo of group or single photo)
+  if (captionText && !sameGroup) {
     const extracted = await parseVehicleFromText(captionText);
     const filled = Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== ''));
     if (Object.keys(filled).length > 0) {
@@ -356,40 +359,43 @@ async function handleMediaUpload(
     }
   }
 
-  const mediaLabel = type === 'image'
-    ? `📸 Foto *${(data.images || []).length}* recebida! ✅`
-    : `🎬 Vídeo recebido e processado! ✅`;
+  // Track media group to avoid duplicate messages for same album
+  if (mediaGroupId) data = { ...data, _mediaGroupId: mediaGroupId };
 
-  // If already in confirm step, refresh summary
+  // If same album: accumulate silently (no message spam)
+  if (sameGroup) {
+    await setSession(chatId, step || 'add_vehicle:photos', data);
+    return;
+  }
+
+  const photoCount = (data.images || []).length;
+  const mediaLabel = type === 'image'
+    ? `📸 ${photoCount === 1 ? 'Foto recebida' : `${photoCount} fotos recebidas`}! ✅`
+    : `🎬 Vídeo recebido! ✅`;
+
+  // Already in confirm step
   if (step === 'add_vehicle:confirm') {
     await setSession(chatId, 'add_vehicle:confirm', data);
     await send(chatId, `${mediaLabel}\n\n${buildSummary(data)}`);
     return;
   }
 
-  // If in photos step, just acknowledge and keep collecting
+  // In photos step
   if (step === 'add_vehicle:photos') {
-    const nextField = nextMissingField(data);
-    if (!nextField) {
-      await setSession(chatId, 'add_vehicle:confirm', data);
-      await send(chatId, `${mediaLabel}\n\n${buildSummary(data)}`);
-    } else {
-      await setSession(chatId, 'add_vehicle:photos', data);
-      await send(chatId, `${mediaLabel}\nEnvie mais mídias ou *"ok"* para confirmar.`);
-    }
+    await setSession(chatId, 'add_vehicle:photos', data);
+    await send(chatId, `${mediaLabel}\nEnvie mais mídias ou *"ok"* para confirmar.`);
     return;
   }
 
-  // No session or in a text-field step — figure out next missing field
+  // No session or in text-field step — figure out next missing field
   const nextField = nextMissingField(data);
   if (!nextField) {
-    // All fields present — go straight to confirm
     await setSession(chatId, 'add_vehicle:confirm', data);
     await send(chatId, `${mediaLabel}\n\n${buildSummary(data)}`);
   } else {
     const filledFields = ALL_FIELDS.filter(f => data[f] !== undefined && data[f] !== '');
     const filledMsg = filledFields.length > 0
-      ? `✅ Peguei: *${filledFields.map(f => f).join(', ')}*\n\n`
+      ? `✅ Peguei: *${filledFields.join(', ')}*\n\n`
       : '';
     await setSession(chatId, `add_vehicle:${nextField}`, data);
     await send(chatId, `${mediaLabel}\n${filledMsg}${QUESTIONS[nextField]}`);
@@ -427,7 +433,7 @@ export default async function handler(req: any, res: any) {
         const largest = photos[photos.length - 1];
         const buffer = await downloadTelegramFile(largest.file_id);
         const uploaded = await uploadToCloudinary(buffer, `photo_${Date.now()}.jpg`, 'image', 'image/jpeg');
-        await handleMediaUpload(chatId, uploaded.url, uploaded.publicId, 'image', text);
+        await handleMediaUpload(chatId, uploaded.url, uploaded.publicId, 'image', text, msg.media_group_id);
       } catch (err: any) {
         await send(chatId, `❌ Erro na foto: ${err?.message}`);
       }
@@ -472,8 +478,16 @@ export default async function handler(req: any, res: any) {
       // Photos/video collection step
       if (step === 'add_vehicle:photos') {
         if (/^(ok|pronto|feito|confirmar|continuar|sim|isso)$/i.test(text)) {
-          await setSession(chatId, 'add_vehicle:confirm', data);
-          await send(chatId, buildSummary(data));
+          const imgCount = (data.images || []).length;
+          if (imgCount > 1) {
+            await setSession(chatId, 'add_vehicle:select_main', data);
+            await send(chatId,
+              `📸 *${imgCount} fotos recebidas!*\n\nQual é a *foto principal* (exibida em destaque no site)?\n\nDigite o número: *1* a *${imgCount}*`
+            );
+          } else {
+            await setSession(chatId, 'add_vehicle:confirm', data);
+            await send(chatId, buildSummary(data));
+          }
         } else if (/^(pular|skip|sem foto|nao|não)$/i.test(text)) {
           await setSession(chatId, 'add_vehicle:confirm', data);
           await send(chatId, buildSummary(data));
@@ -481,6 +495,27 @@ export default async function handler(req: any, res: any) {
           await send(chatId,
             `Use o clipe 📎 para enviar fotos ou vídeos.\nOu envie *"ok"* para confirmar, *"pular"* para continuar sem mídia.`
           );
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      // Select main photo step
+      if (step === 'add_vehicle:select_main') {
+        const num = parseInt(text.trim(), 10) - 1;
+        const imgs: string[] = data.images || [];
+        const pids: string[] = data.imagePublicIds || [];
+        if (!isNaN(num) && num >= 0 && num < imgs.length) {
+          const newImgs = [...imgs];
+          const newPids = [...pids];
+          const [mainImg] = newImgs.splice(num, 1);
+          const [mainPid] = newPids.splice(num, 1);
+          newImgs.unshift(mainImg);
+          newPids.unshift(mainPid);
+          const newData = { ...data, images: newImgs, imagePublicIds: newPids };
+          await setSession(chatId, 'add_vehicle:confirm', newData);
+          await send(chatId, `✅ Foto *${num + 1}* definida como principal.\n\n${buildSummary(newData)}`);
+        } else {
+          await send(chatId, `❌ Digite um número entre *1* e *${imgs.length}*`);
         }
         return res.status(200).json({ ok: true });
       }
