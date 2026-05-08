@@ -20,8 +20,8 @@ const db = getFirestore(firebaseApp, DB_ID);
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '';
-const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME || '';
-const CLOUDINARY_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || '';
+const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME || process.env.VITE_CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || process.env.VITE_CLOUDINARY_UPLOAD_PRESET || '';
 const SITE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : 'https://premium-caminhoes2.vercel.app';
@@ -64,7 +64,7 @@ async function uploadToCloudinary(
   mimeType = 'image/jpeg',
 ): Promise<UploadResult> {
   if (!CLOUDINARY_CLOUD || !CLOUDINARY_PRESET) {
-    throw new Error('Configure CLOUDINARY_CLOUD_NAME e CLOUDINARY_UPLOAD_PRESET no Vercel');
+    throw new Error('Configure CLOUDINARY_CLOUD_NAME (ou VITE_CLOUDINARY_CLOUD_NAME) e CLOUDINARY_UPLOAD_PRESET no Vercel');
   }
   const form = new FormData();
   form.append('file', new Blob([buffer], { type: mimeType }), filename);
@@ -75,7 +75,7 @@ async function uploadToCloudinary(
     { method: 'POST', body: form },
   );
   const data: any = await res.json();
-  if (!data.secure_url) throw new Error(data.error?.message || 'Upload Cloudinary falhou');
+  if (!data.secure_url) throw new Error(`${data.error?.message || 'Upload Cloudinary falhou'} [cloud=${CLOUDINARY_CLOUD}, preset=${CLOUDINARY_PRESET}]`);
   return { url: data.secure_url as string, publicId: data.public_id as string };
 }
 

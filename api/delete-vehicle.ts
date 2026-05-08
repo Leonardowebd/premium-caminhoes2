@@ -15,7 +15,7 @@ const DB_ID = 'ai-studio-00d52f2c-1bad-4538-971c-e963f0ca9abb';
 const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(firebaseApp, DB_ID);
 
-const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME || process.env.VITE_CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_KEY = process.env.CLOUDINARY_API_KEY || '';
 const CLOUDINARY_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 
