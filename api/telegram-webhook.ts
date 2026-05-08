@@ -147,8 +147,8 @@ async function saveVehicle(data: Record<string, any>) {
     brand: String(data.brand || '').trim(),
     model: String(data.model || '').trim(),
     year: Number(data.year) || new Date().getFullYear(),
-    price: Number(String(data.price || '0').replace(/\D/g, '')),
-    kilometers: Number(String(data.km || '0').replace(/\D/g, '')),
+    price: Number(String(data.price || '0').replace(/,\d{1,2}$/, '').replace(/\./g, '').replace(/[^\d]/g, '')) || 0,
+    kilometers: Number(String(data.km || '0').replace(/\./g, '').replace(/[^\d]/g, '')) || 0,
     transmission: String(data.transmission || 'Manual').trim(),
     power: String(data.power || '').trim(),
     traction: String(data.traction || '').trim(),
@@ -250,9 +250,11 @@ function regexExtract(text: string): Record<string, string> {
   const yearMatch = text.match(/\b(19[5-9]\d|20[0-2]\d)(?:\/\d{2,4})?\b/);
   const year = yearMatch?.[1] || '';
 
-  // price: R$ 172.000,00 or 172000 or 172.000
-  const priceMatch = text.match(/R\$\s*[\s]*([\d.,]+)/i) || text.match(/\b(\d{3}[.,]\d{3}(?:[.,]\d{2})?)\b/);
-  const price = priceMatch ? priceMatch[1].replace(/[.,\s]/g, '').replace(/[^\d]/g, '') : '';
+  // price: R$ 85.000,00 → remove decimal part first, then thousands dots
+  const priceMatch = text.match(/R\$\s*([\d.,]+)/i) || text.match(/\b(\d{3}[.,]\d{3}(?:[.,]\d{2})?)\b/);
+  const price = priceMatch
+    ? priceMatch[1].replace(/,\d{1,2}$/, '').replace(/\./g, '').replace(/[^\d]/g, '')
+    : '';
 
   // km
   const kmMatch = text.match(/([\d.,]+)\s*km/i);
