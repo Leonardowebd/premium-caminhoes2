@@ -336,58 +336,63 @@ async function handleMediaUpload(
 ) {
   const session = await getSession(chatId);
 
+  // Start with existing session data (or empty if no session)
   let data: Record<string, any> = session?.data || {};
-  let step: string = session?.step || 'add_vehicle:brand';
+  const step: string = session?.step || '';
 
+  // Add media to data first
   if (type === 'image') {
-    const images: string[] = [...(data.images || []), url];
-    const imagePublicIds: string[] = [...(data.imagePublicIds || []), publicId];
-    data = { ...data, images, imagePublicIds };
+    data = { ...data, images: [...(data.images || []), url], imagePublicIds: [...(data.imagePublicIds || []), publicId] };
   } else {
-    // Latest video replaces previous (one video per vehicle)
     data = { ...data, videoUrl: url, videoPublicIds: [...(data.videoPublicIds || []), publicId] };
+  }
+
+  // Parse caption BEFORE any session logic — merge extracted fields into data
+  if (captionText) {
+    const extracted = await parseVehicleFromText(captionText);
+    const filled = Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== ''));
+    if (Object.keys(filled).length > 0) {
+      data = { ...data, ...filled };
+    }
   }
 
   const mediaLabel = type === 'image'
     ? `📸 Foto *${(data.images || []).length}* recebida! ✅`
     : `🎬 Vídeo recebido e processado! ✅`;
 
-  if (!session || !step.startsWith('add_vehicle')) {
-    // No session — start vehicle flow
-    await setSession(chatId, 'add_vehicle:brand', data);
-    await send(chatId, `${mediaLabel}\nVamos cadastrar o veículo. Cancele com "cancelar".\n\n${QUESTIONS['brand']}`);
-  } else if (step === 'add_vehicle:photos') {
-    await setSession(chatId, 'add_vehicle:photos', data);
-    await send(chatId, `${mediaLabel}\nEnvie mais mídias ou *"ok"* para confirmar.`);
-  } else if (step === 'add_vehicle:confirm') {
+  // If already in confirm step, refresh summary
+  if (step === 'add_vehicle:confirm') {
+    await setSession(chatId, 'add_vehicle:confirm', data);
+    await send(chatId, `${mediaLabel}\n\n${buildSummary(data)}`);
+    return;
+  }
+
+  // If in photos step, just acknowledge and keep collecting
+  if (step === 'add_vehicle:photos') {
+    const nextField = nextMissingField(data);
+    if (!nextField) {
+      await setSession(chatId, 'add_vehicle:confirm', data);
+      await send(chatId, `${mediaLabel}\n\n${buildSummary(data)}`);
+    } else {
+      await setSession(chatId, 'add_vehicle:photos', data);
+      await send(chatId, `${mediaLabel}\nEnvie mais mídias ou *"ok"* para confirmar.`);
+    }
+    return;
+  }
+
+  // No session or in a text-field step — figure out next missing field
+  const nextField = nextMissingField(data);
+  if (!nextField) {
+    // All fields present — go straight to confirm
     await setSession(chatId, 'add_vehicle:confirm', data);
     await send(chatId, `${mediaLabel}\n\n${buildSummary(data)}`);
   } else {
-    // Still answering text fields
-    await setSession(chatId, step, data);
-    const nextField = nextMissingField(data);
-    await send(chatId, `${mediaLabel}\n\n${nextField ? QUESTIONS[nextField] : 'Continue respondendo.'}`);
-  }
-
-  // Also process caption data if present
-  if (captionText) {
-    const extracted = await parseVehicleFromText(captionText);
-    const hasData = Object.values(extracted).some(v => v !== '');
-    if (hasData) {
-      const currentSession = await getSession(chatId);
-      if (currentSession?.step?.startsWith('add_vehicle')) {
-        const merged = {
-          ...currentSession.data,
-          ...Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== '')),
-        };
-        const nextField = nextMissingField(merged);
-        if (nextField) {
-          await setSession(chatId, `add_vehicle:${nextField}`, merged);
-        } else {
-          await transitionToPhotosOrConfirm(chatId, merged);
-        }
-      }
-    }
+    const filledFields = ALL_FIELDS.filter(f => data[f] !== undefined && data[f] !== '');
+    const filledMsg = filledFields.length > 0
+      ? `✅ Peguei: *${filledFields.map(f => f).join(', ')}*\n\n`
+      : '';
+    await setSession(chatId, `add_vehicle:${nextField}`, data);
+    await send(chatId, `${mediaLabel}\n${filledMsg}${QUESTIONS[nextField]}`);
   }
 }
 
