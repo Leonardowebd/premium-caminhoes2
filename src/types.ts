@@ -30,6 +30,7 @@ export interface ContactMessage {
 export interface Banner {
   id: string;
   imageUrl: string;
+  videoUrl?: string;
   title?: string;
   headline?: string;
   subheadline?: string;
@@ -56,4 +57,5 @@ export interface SiteSettings {
   logoUrl: string;
   contactPhone: string;
   contactEmail: string;
+  bannerVideoMuted?: boolean;
 }

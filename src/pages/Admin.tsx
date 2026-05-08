@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { db } from '../lib/firebase';
 import { uploadImage } from '../lib/upload';
 import { Vehicle, Banner, Brand, ContactMessage, AdminUser } from '../types';
-import { Truck, Image, Tag, Settings, Plus, Edit2, Trash2, LayoutDashboard, ChevronRight, Save, X, MessageSquare, Mail, Phone, Loader2, Upload, CheckCircle, Users, MapPin, Calendar, TrendingUp } from 'lucide-react';
+import { Truck, Image, Tag, Settings, Plus, Edit2, Trash2, LayoutDashboard, ChevronRight, Save, X, MessageSquare, Mail, Phone, Loader2, Upload, CheckCircle, Users, MapPin, Calendar, TrendingUp, Play, Volume2, VolumeX } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { format, subDays, startOfDay, isAfter } from 'date-fns';
 import { motion } from 'motion/react';
@@ -798,6 +798,7 @@ function SettingsManager() {
     const [newUsername, setNewUsername] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [logoUrl, setLogoUrl] = useState('');
+    const [bannerVideoMuted, setBannerVideoMuted] = useState(true);
     const { handleSubmit } = useForm();
 
     useEffect(() => {
@@ -812,6 +813,7 @@ function SettingsManager() {
                 const data = snap.docs[0].data();
                 setSettings({ id: snap.docs[0].id, ...data });
                 setLogoUrl(data.logoUrl || '');
+                setBannerVideoMuted(data.bannerVideoMuted !== false);
             }
         } catch (err) {
             console.error(err);
@@ -822,7 +824,7 @@ function SettingsManager() {
 
     const onSubmit = async () => {
         try {
-            const data = { logoUrl };
+            const data = { logoUrl, bannerVideoMuted };
             if (settings) {
                 await updateDoc(doc(db, 'settings', settings.id), data);
             } else {
@@ -887,6 +889,24 @@ function SettingsManager() {
                      onChange={setLogoUrl}
                   />
                   <p className="text-[10px] text-on-surface-variant italic">Recomendado: PNG com fundo transparente, mínimo 128px de altura.</p>
+
+                  <div className="space-y-2">
+                     <p className="text-[10px] font-bold uppercase text-primary tracking-widest">Áudio dos Vídeos do Banner</p>
+                     <button
+                        type="button"
+                        onClick={() => setBannerVideoMuted(prev => !prev)}
+                        className={cn(
+                           "flex items-center gap-3 px-6 py-4 border font-headline font-bold uppercase text-xs tracking-widest transition-all",
+                           bannerVideoMuted
+                              ? "border-white/20 text-on-surface-variant hover:border-primary hover:text-primary"
+                              : "border-primary text-primary bg-primary/10"
+                        )}
+                     >
+                        {bannerVideoMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                        {bannerVideoMuted ? 'Vídeos Mudos (Clique para ativar som)' : 'Vídeos com Som (Clique para mutar)'}
+                     </button>
+                     <p className="text-[10px] text-on-surface-variant italic">Obs: Navegadores bloqueiam autoplay com som. Recomendado manter mudo.</p>
+                  </div>
 
                   <button type="submit" className="industrial-gradient text-black px-12 py-5 font-headline font-black uppercase tracking-widest text-sm hover:scale-105 transition-all shadow-xl shadow-primary/20">
                      Salvar Alterações
@@ -1099,6 +1119,8 @@ function BannerManager() {
     const [loading, setLoading] = useState(true);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [bannerImageUrl, setBannerImageUrl] = useState('');
+    const [bannerMode, setBannerMode] = useState<'image' | 'video'>('image');
+    const [bannerVideoUrl, setBannerVideoUrl] = useState('');
 
     const { register, handleSubmit, reset } = useForm();
 
@@ -1119,11 +1141,20 @@ function BannerManager() {
     }
 
     const onSubmit = async (data: any) => {
-        if (!bannerImageUrl) {
+        if (bannerMode === 'image' && !bannerImageUrl) {
             alert('Selecione uma imagem para o banner.');
             return;
         }
-        const docData = { ...data, imageUrl: bannerImageUrl, order: Number(data.order) || 1 };
+        if (bannerMode === 'video' && !bannerVideoUrl.trim()) {
+            alert('Informe o link do YouTube.');
+            return;
+        }
+        const docData = {
+            ...data,
+            imageUrl: bannerMode === 'image' ? bannerImageUrl : '',
+            videoUrl: bannerMode === 'video' ? bannerVideoUrl.trim() : '',
+            order: Number(data.order) || 1,
+        };
         try {
             if (editing) {
                 await updateDoc(doc(db, 'banners', editing.id), docData);
@@ -1135,12 +1166,28 @@ function BannerManager() {
             setIsFormOpen(false);
             setEditing(null);
             setBannerImageUrl('');
+            setBannerVideoUrl('');
+            setBannerMode('image');
             reset();
             fetchBanners();
         } catch (err) {
             console.error(err);
             alert('Erro ao salvar banner.');
         }
+    };
+
+    const handleEdit = (b: Banner) => {
+        setEditing(b);
+        if (b.videoUrl) {
+            setBannerMode('video');
+            setBannerVideoUrl(b.videoUrl);
+            setBannerImageUrl('');
+        } else {
+            setBannerMode('image');
+            setBannerImageUrl(b.imageUrl || '');
+            setBannerVideoUrl('');
+        }
+        setIsFormOpen(true);
     };
 
     const handleDelete = async (id: string) => {
@@ -1162,7 +1209,12 @@ function BannerManager() {
                    <h1 className="text-4xl font-headline font-black text-white uppercase tracking-tighter mb-2">Banners Hero</h1>
                    <p className="text-on-surface-variant uppercase tracking-widest text-xs font-bold">Gerencie os slides da home page.</p>
                 </div>
-                <button onClick={() => { setEditing(null); reset(); setBannerImageUrl(''); setIsFormOpen(true); }} className="industrial-gradient text-black font-headline font-black uppercase text-xs px-8 py-4 flex items-center gap-3 transition-all transform hover:scale-105"><Plus size={18} /> Novo Banner</button>
+                <button
+                    onClick={() => { setEditing(null); reset(); setBannerImageUrl(''); setBannerVideoUrl(''); setBannerMode('image'); setIsFormOpen(true); }}
+                    className="industrial-gradient text-black font-headline font-black uppercase text-xs px-8 py-4 flex items-center gap-3 transition-all transform hover:scale-105"
+                >
+                    <Plus size={18} /> Novo Banner
+                </button>
             </div>
 
             {feedback && (
@@ -1179,10 +1231,17 @@ function BannerManager() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {banners.map(b => (
                     <div key={b.id} className="bg-surface border border-white/5 overflow-hidden group hover:border-primary/50 transition-all">
-                      <div className="aspect-video relative overflow-hidden">
-                          <img src={b.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div className="aspect-video relative overflow-hidden bg-black">
+                          {b.videoUrl ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-[#1a1a1a]">
+                              <Play size={40} className="text-primary" />
+                              <span className="text-white/60 font-headline font-bold uppercase text-[10px] tracking-widest">Vídeo YouTube</span>
+                            </div>
+                          ) : (
+                            <img src={b.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                          )}
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                            <button onClick={() => { setEditing(b); setBannerImageUrl(b.imageUrl || ''); setIsFormOpen(true); }} className="bg-white text-black p-3 rounded-full hover:bg-primary transition-colors"><Edit2 size={20}/></button>
+                            <button onClick={() => handleEdit(b)} className="bg-white text-black p-3 rounded-full hover:bg-primary transition-colors"><Edit2 size={20}/></button>
                             <button onClick={() => handleDelete(b.id)} className="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors"><Trash2 size={20}/></button>
                           </div>
                       </div>
@@ -1201,8 +1260,8 @@ function BannerManager() {
             )}
 
             {isFormOpen && (
-               <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6">
-                  <div className="bg-surface w-full max-w-lg p-10 border border-white/10 relative">
+               <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6 overflow-y-auto">
+                  <div className="bg-surface w-full max-w-lg p-10 border border-white/10 relative my-6">
                      <button onClick={() => setIsFormOpen(false)} className="absolute top-6 right-6 text-primary"><X /></button>
                      <h2 className="text-xl font-headline font-black text-white uppercase mb-8 border-l-4 border-primary pl-4">Gestão de Banner</h2>
                      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -1211,15 +1270,56 @@ function BannerManager() {
                            <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Banner Scania – Junho" />
                         </div>
 
-                        <ImagePicker
-                           label="Imagem do Banner"
-                           folder="banners"
-                           value={bannerImageUrl}
-                           onChange={setBannerImageUrl}
-                           required
-                        />
+                        {/* Mode Toggle */}
+                        <div className="space-y-2">
+                           <p className="text-[10px] font-bold uppercase text-primary tracking-widest">Tipo de Mídia</p>
+                           <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setBannerMode('image')}
+                                className={cn(
+                                    "flex-1 py-3 font-headline font-black uppercase text-xs tracking-widest transition-all border",
+                                    bannerMode === 'image' ? "bg-primary text-black border-primary" : "border-white/20 text-on-surface-variant hover:border-primary hover:text-primary"
+                                )}
+                              >
+                                Imagem
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBannerMode('video')}
+                                className={cn(
+                                    "flex-1 py-3 font-headline font-black uppercase text-xs tracking-widest transition-all border flex items-center justify-center gap-2",
+                                    bannerMode === 'video' ? "bg-primary text-black border-primary" : "border-white/20 text-on-surface-variant hover:border-primary hover:text-primary"
+                                )}
+                              >
+                                <Play size={12} /> YouTube
+                              </button>
+                           </div>
+                        </div>
 
-                        <p className="text-[10px] font-bold uppercase text-on-surface-variant tracking-widest pt-2 border-t border-white/5">Texto sobre a imagem (todos opcionais)</p>
+                        {bannerMode === 'image' ? (
+                           <ImagePicker
+                              label="Imagem do Banner"
+                              folder="banners"
+                              value={bannerImageUrl}
+                              onChange={setBannerImageUrl}
+                              required
+                           />
+                        ) : (
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Link do YouTube</label>
+                              <input
+                                 type="url"
+                                 value={bannerVideoUrl}
+                                 onChange={(e) => setBannerVideoUrl(e.target.value)}
+                                 className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none"
+                                 placeholder="https://www.youtube.com/watch?v=..."
+                              />
+                              <p className="text-[10px] text-on-surface-variant italic">O vídeo toca em loop automático, sem controles, sem logo.</p>
+                           </div>
+                        )}
+
+                        <p className="text-[10px] font-bold uppercase text-on-surface-variant tracking-widest pt-2 border-t border-white/5">Texto sobre a mídia (todos opcionais)</p>
 
                         <div className="space-y-1">
                            <label className="text-[10px] font-bold uppercase text-primary">Headline</label>

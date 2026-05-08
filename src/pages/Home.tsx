@@ -2,6 +2,20 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, limit, orderBy, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Vehicle, Banner } from '../types';
+
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/watch\?v=([^&]+)/,
+    /youtube\.com\/embed\/([^?]+)/,
+    /youtube\.com\/shorts\/([^?]+)/,
+    /youtu\.be\/([^?]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Filter, ShieldCheck, Headset, ArrowRight, Gauge, Activity, CalendarDays } from 'lucide-react';
@@ -13,6 +27,7 @@ export default function Home() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [bannerVideoMuted, setBannerVideoMuted] = useState(true);
   const navigate = useNavigate();
 
   // Filter States
@@ -52,6 +67,12 @@ export default function Home() {
         const bannersSnap = await getDocs(collection(db, 'banners'));
         const bData = bannersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Banner)).sort((a, b) => a.order - b.order);
         setBanners(bData);
+
+        const settingsSnap = await getDocs(collection(db, 'settings'));
+        if (!settingsSnap.empty) {
+          const sData = settingsSnap.docs[0].data();
+          setBannerVideoMuted(sData.bannerVideoMuted !== false);
+        }
       } catch (err) {
         console.error("Error fetching data:", err);
       } finally {
@@ -113,12 +134,35 @@ export default function Home() {
             transition={{ duration: 1 }}
             className="absolute inset-0"
           >
-            <img 
-              src={displayBanners[currentSlide]?.imageUrl} 
-              alt={displayBanners[currentSlide]?.title}
-              className="w-full h-full object-cover px-0" // Ensure no horizontal padding on images
-              referrerPolicy="no-referrer"
-            />
+            {displayBanners[currentSlide]?.videoUrl ? (() => {
+              const vidId = extractYouTubeId(displayBanners[currentSlide].videoUrl!);
+              return vidId ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${vidId}?autoplay=1&loop=1&controls=0&showinfo=0&modestbranding=1&mute=${bannerVideoMuted ? 1 : 0}&playlist=${vidId}&rel=0&disablekb=1&iv_load_policy=3`}
+                  allow="autoplay; encrypted-media"
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '177.78vh',
+                    minWidth: '100%',
+                    height: '56.25vw',
+                    minHeight: '100%',
+                    pointerEvents: 'none',
+                    border: 'none',
+                  }}
+                  title={displayBanners[currentSlide]?.title || 'Banner'}
+                />
+              ) : null;
+            })() : (
+              <img
+                src={displayBanners[currentSlide]?.imageUrl}
+                alt={displayBanners[currentSlide]?.title}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
             
             {/* Banner Content — only renders if any text field is set */}
