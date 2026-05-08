@@ -73,32 +73,35 @@ export default function Catalog() {
       </section>
 
       <div className="container mx-auto px-6 py-12">
-        <div className="flex flex-col lg:flex-row gap-12">           {/* Sidebar Filters - Desktop */}
-          <aside className="hidden lg:block w-64 space-y-12 h-fit sticky top-32">
+        <div className="flex flex-col lg:flex-row gap-12">
+          {/* Sidebar Filters - Desktop */}
+          <aside className="hidden lg:block w-72 h-fit sticky top-32 bg-surface/40 border border-white/5 p-6 space-y-8">
              <div>
-                <h3 className="font-headline font-bold text-white uppercase tracking-widest text-sm mb-6 border-l-2 border-primary pl-3">Busca</h3>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.25em] mb-3">Buscar</p>
                 <div className="relative">
-                   <input 
-                      type="text" 
-                      placeholder="Ex: Scania R500" 
-                      className="w-full bg-surface border-none text-white py-3 pl-4 pr-10 focus:ring-1 focus:ring-primary outline-none"
+                   <input
+                      type="text"
+                      placeholder="Marca ou modelo..."
+                      className="w-full bg-background/60 border border-white/10 text-white text-sm py-2.5 pl-4 pr-10 focus:border-primary outline-none transition-colors placeholder:text-white/30"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                    />
-                   <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary" />
+                   <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary" />
                 </div>
              </div>
 
-             <div>
-                <h3 className="font-headline font-bold text-white uppercase tracking-widest text-sm mb-6 border-l-2 border-primary pl-3">Marca</h3>
-                <div className="flex flex-col gap-4">
+             <div className="border-t border-white/5 pt-6">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.25em] mb-4">Marca</p>
+                <div className="flex flex-col gap-1">
                    {brands.map(brand => (
-                      <button 
+                      <button
                         key={brand}
                         onClick={() => setSelectedBrand(brand)}
                         className={cn(
-                          "text-left uppercase font-headline font-bold tracking-widest text-xs transition-all",
-                          selectedBrand === brand ? "text-primary translate-x-2" : "text-on-surface-variant hover:text-white"
+                          "text-left text-sm py-1.5 px-3 transition-all rounded-sm font-medium",
+                          selectedBrand === brand
+                            ? "bg-primary/15 text-primary border-l-2 border-primary pl-2"
+                            : "text-white/50 hover:text-white hover:bg-white/5"
                         )}
                       >
                          {brand}
@@ -107,16 +110,18 @@ export default function Catalog() {
                 </div>
              </div>
 
-             <div>
-                <h3 className="font-headline font-bold text-white uppercase tracking-widest text-sm mb-6 border-l-2 border-primary pl-3">Categoria</h3>
-                <div className="flex flex-col gap-4">
+             <div className="border-t border-white/5 pt-6">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.25em] mb-4">Categoria</p>
+                <div className="flex flex-col gap-1">
                    {types.map(type => (
-                      <button 
+                      <button
                         key={type}
                         onClick={() => setSelectedType(type)}
                         className={cn(
-                          "text-left uppercase font-headline font-bold tracking-widest text-xs transition-all",
-                          selectedType === type ? "text-primary translate-x-2" : "text-on-surface-variant hover:text-white"
+                          "text-left text-sm py-1.5 px-3 transition-all rounded-sm font-medium",
+                          selectedType === type
+                            ? "bg-primary/15 text-primary border-l-2 border-primary pl-2"
+                            : "text-white/50 hover:text-white hover:bg-white/5"
                         )}
                       >
                          {type}
@@ -125,16 +130,18 @@ export default function Catalog() {
                 </div>
              </div>
 
-             <div>
-                <h3 className="font-headline font-bold text-white uppercase tracking-widest text-sm mb-6 border-l-2 border-primary pl-3">Ano</h3>
-                <div className="flex flex-col gap-4">
+             <div className="border-t border-white/5 pt-6">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.25em] mb-4">Ano</p>
+                <div className="flex flex-col gap-1">
                    {years.map(year => (
-                      <button 
+                      <button
                         key={year}
                         onClick={() => setSelectedYear(year)}
                         className={cn(
-                          "text-left uppercase font-headline font-bold tracking-widest text-xs transition-all",
-                          selectedYear === year ? "text-primary translate-x-2" : "text-on-surface-variant hover:text-white"
+                          "text-left text-sm py-1.5 px-3 transition-all rounded-sm font-medium",
+                          selectedYear === year
+                            ? "bg-primary/15 text-primary border-l-2 border-primary pl-2"
+                            : "text-white/50 hover:text-white hover:bg-white/5"
                         )}
                       >
                          {year}
