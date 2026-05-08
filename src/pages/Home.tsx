@@ -221,7 +221,7 @@ export default function Home() {
         )}
 
         {/* Carousel Dots */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-40">
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 flex gap-3 z-40">
           {displayBanners.map((_, i) => (
             <button
               key={i}
