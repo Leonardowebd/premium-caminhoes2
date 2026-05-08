@@ -3,8 +3,22 @@ import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Vehicle } from '../types';
-import { CalendarDays, Gauge, Activity, Settings, Fuel, Palette, ShieldCheck, ChevronLeft, ArrowRight, MessageSquare, Phone } from 'lucide-react';
+import { CalendarDays, Gauge, Activity, Settings, Fuel, Palette, ShieldCheck, ChevronLeft, ArrowRight, MessageSquare, Phone, Play } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
+
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/watch\?v=([^&]+)/,
+    /youtube\.com\/embed\/([^?]+)/,
+    /youtube\.com\/shorts\/([^?]+)/,
+    /youtu\.be\/([^?]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +26,7 @@ export default function ProductDetail() {
   const [similar, setSimilar] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [activeIsVideo, setActiveIsVideo] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -23,6 +38,7 @@ export default function ProductDetail() {
           const data = { id: docSnap.id, ...docSnap.data() } as Vehicle;
           setVehicle(data);
           setActiveImage(data.imageUrl);
+          setActiveIsVideo(false);
 
           // Fetch similar
           const q = query(
@@ -69,40 +85,68 @@ export default function ProductDetail() {
             
             <div className="space-y-4">
               <div className="relative aspect-video overflow-hidden border border-white/5 bg-surface group">
-                 <img 
-                   src={activeImage || vehicle.imageUrl} 
-                   alt={vehicle.model} 
-                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-                   referrerPolicy="no-referrer"
-                 />
-                 <div className="absolute top-8 left-8">
-                    <span className="bg-primary text-black font-headline font-black text-xs px-4 py-2 uppercase tracking-widest shadow-2xl">Destaque Elite</span>
-                 </div>
+                 {activeIsVideo && vehicle.videoUrl ? (() => {
+                   const vidId = extractYouTubeId(vehicle.videoUrl);
+                   return vidId ? (
+                     <iframe
+                       src={`https://www.youtube.com/embed/${vidId}?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
+                       allow="autoplay; encrypted-media; fullscreen"
+                       allowFullScreen
+                       className="w-full h-full"
+                       style={{ border: 'none' }}
+                       title={`${vehicle.brand} ${vehicle.model} - Vídeo`}
+                     />
+                   ) : null;
+                 })() : (
+                   <img
+                     src={activeImage || vehicle.imageUrl}
+                     alt={vehicle.model}
+                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
+                     referrerPolicy="no-referrer"
+                   />
+                 )}
+                 {!activeIsVideo && (
+                   <div className="absolute top-8 left-8">
+                     <span className="bg-primary text-black font-headline font-black text-xs px-4 py-2 uppercase tracking-widest shadow-2xl">Destaque Elite</span>
+                   </div>
+                 )}
               </div>
 
-              {vehicle.gallery && vehicle.gallery.length > 0 && (
+              {(vehicle.gallery && vehicle.gallery.length > 0 || vehicle.videoUrl) && (
                 <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
-                   <button 
-                     onClick={() => setActiveImage(vehicle.imageUrl)}
+                   <button
+                     onClick={() => { setActiveImage(vehicle.imageUrl); setActiveIsVideo(false); }}
                      className={cn(
-                       "aspect-square border-2 transition-all overflow-hidden bg-surface", 
-                       activeImage === vehicle.imageUrl ? "border-primary" : "border-transparent opacity-50 hover:opacity-100"
+                       "aspect-square border-2 transition-all overflow-hidden bg-surface",
+                       activeImage === vehicle.imageUrl && !activeIsVideo ? "border-primary" : "border-transparent opacity-50 hover:opacity-100"
                      )}
                    >
                      <img src={vehicle.imageUrl} className="w-full h-full object-cover shadow-lg" />
                    </button>
-                   {vehicle.gallery.map((url, i) => (
-                     <button 
+                   {vehicle.gallery?.map((url, i) => (
+                     <button
                        key={i}
-                       onClick={() => setActiveImage(url)}
+                       onClick={() => { setActiveImage(url); setActiveIsVideo(false); }}
                        className={cn(
-                         "aspect-square border-2 transition-all overflow-hidden bg-surface", 
-                         activeImage === url ? "border-primary" : "border-transparent opacity-50 hover:opacity-100"
+                         "aspect-square border-2 transition-all overflow-hidden bg-surface",
+                         activeImage === url && !activeIsVideo ? "border-primary" : "border-transparent opacity-50 hover:opacity-100"
                        )}
                      >
                        <img src={url} className="w-full h-full object-cover shadow-lg" />
                      </button>
                    ))}
+                   {vehicle.videoUrl && (
+                     <button
+                       onClick={() => setActiveIsVideo(true)}
+                       className={cn(
+                         "aspect-square border-2 transition-all overflow-hidden bg-surface flex flex-col items-center justify-center gap-1",
+                         activeIsVideo ? "border-primary bg-primary/10" : "border-transparent opacity-50 hover:opacity-100"
+                       )}
+                     >
+                       <Play size={20} className="text-primary" />
+                       <span className="text-[9px] font-bold uppercase text-primary tracking-widest">Vídeo</span>
+                     </button>
+                   )}
                 </div>
               )}
             </div>

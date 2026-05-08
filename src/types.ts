@@ -10,6 +10,7 @@ export interface Vehicle {
   traction: string;
   imageUrl: string;
   gallery?: string[];
+  videoUrl?: string;
   description: string;
   isFeatured: boolean;
   type: string;

@@ -659,6 +659,10 @@ function VehicleManager() {
                               <label className="text-[10px] font-bold uppercase text-primary tracking-widest">Descrição</label>
                               <textarea {...register('description')} defaultValue={editingVehicle?.description} className="w-full bg-[#2a2a2a] border-none text-white py-3 px-4 outline-none h-24 resize-none" />
                            </div>
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-bold uppercase text-primary tracking-widest flex items-center gap-2"><Play size={12} /> Vídeo YouTube <span className="text-on-surface-variant font-normal">(Opcional)</span></label>
+                              <input {...register('videoUrl')} defaultValue={editingVehicle?.videoUrl} className="w-full bg-[#2a2a2a] border-none text-white py-3 px-4 outline-none" placeholder="https://www.youtube.com/watch?v=..." />
+                           </div>
                            <div className="flex items-center gap-3 py-2">
                               <input type="checkbox" {...register('isFeatured')} defaultChecked={editingVehicle?.isFeatured} id="isFeatured" className="w-5 h-5 accent-primary" />
                               <label htmlFor="isFeatured" className="text-xs uppercase font-bold text-white cursor-pointer tracking-widest">Destacar na Home</label>
