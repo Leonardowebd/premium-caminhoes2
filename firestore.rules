@@ -15,14 +15,18 @@ service cloud.firestore {
     function isValidVehicle(data) {
       return data.brand is string && data.brand.size() <= 200 &&
              data.model is string && data.model.size() <= 200 &&
-             data.price is number && data.price >= 0 &&
-             data.imageUrl is string && data.imageUrl.size() <= 2000;
+             data.price is number && data.price >= 0;
     }
 
     match /vehicles/{vehicleId} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidId(vehicleId) && isValidVehicle(request.resource.data);
+      allow create, update: if isAdmin() && isValidVehicle(request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    // Bot sessions (Telegram bot state — server-side only, no user auth)
+    match /bot_sessions/{sessionId} {
+      allow read, write: if true;
     }
 
     // Banners
