@@ -469,9 +469,16 @@ function VehicleManager() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Tem certeza que deseja excluir este veículo?")) return;
-        await deleteDoc(doc(db, 'vehicles', id));
-        setFeedback('Veículo excluído!');
+        if (!confirm("Tem certeza que deseja excluir este veículo? As fotos e vídeos também serão removidos.")) return;
+        try {
+            const res = await fetch(`/api/delete-vehicle?id=${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Erro ao excluir');
+            setFeedback('Veículo e mídias excluídos!');
+        } catch {
+            // Fallback: delete only from Firestore
+            await deleteDoc(doc(db, 'vehicles', id));
+            setFeedback('Veículo excluído (mídias podem precisar limpeza manual).');
+        }
         setTimeout(() => setFeedback(null), 3000);
         fetchVehicles();
     };
