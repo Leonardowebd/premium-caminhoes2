@@ -1,8 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { initializeApp, getApps } from 'firebase/app';
 import {
-  getFirestore, collection, addDoc, getDocs,
-  updateDoc, doc, query, orderBy, limit, setDoc, getDoc, deleteDoc,
+  getFirestore, collection, addDoc, getDocs, updateDoc,
+  doc, query, orderBy, limit, setDoc, getDoc, deleteDoc,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -20,11 +20,11 @@ const db = getFirestore(firebaseApp, DB_ID);
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '';
-const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME!;
-const CLOUDINARY_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET!;
+const CLOUDINARY_CLOUD = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || '';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-// ── Telegram ─────────────────────────────────────────────────────────────────
+// ── Telegram ──────────────────────────────────────────────────────────────────
 
 async function send(chatId: number, text: string) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -36,37 +36,35 @@ async function send(chatId: number, text: string) {
 
 async function downloadTelegramPhoto(fileId: string): Promise<Buffer> {
   const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`);
-  const j = await r.json();
+  const j: any = await r.json();
   const filePath = j.result?.file_path;
-  if (!filePath) throw new Error('No file path from Telegram');
+  if (!filePath) throw new Error('Telegram getFile falhou');
   const photoRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`);
-  const ab = await photoRes.arrayBuffer();
-  return Buffer.from(ab);
+  return Buffer.from(await photoRes.arrayBuffer());
 }
 
 // ── Cloudinary ────────────────────────────────────────────────────────────────
 
 async function uploadToCloudinary(buffer: Buffer, filename: string): Promise<string> {
+  if (!CLOUDINARY_CLOUD || !CLOUDINARY_PRESET) {
+    throw new Error('CLOUDINARY_CLOUD_NAME e CLOUDINARY_UPLOAD_PRESET não configurados no Vercel');
+  }
   const form = new FormData();
   form.append('file', new Blob([buffer], { type: 'image/jpeg' }), filename);
   form.append('upload_preset', CLOUDINARY_PRESET);
   form.append('folder', 'premium-caminhoes/vehicles');
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
-    method: 'POST',
-    body: form,
-  });
-  const data = await res.json();
-  if (!data.secure_url) throw new Error(data.error?.message || 'Cloudinary upload failed');
-  return data.secure_url;
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`,
+    { method: 'POST', body: form }
+  );
+  const data: any = await res.json();
+  if (!data.secure_url) throw new Error(data.error?.message || 'Upload falhou');
+  return data.secure_url as string;
 }
 
 // ── Session ───────────────────────────────────────────────────────────────────
 
-interface Session {
-  step: string;
-  data: Record<string, any>;
-  updatedAt: number;
-}
+interface Session { step: string; data: Record<string, any>; updatedAt: number; }
 
 async function getSession(chatId: number): Promise<Session | null> {
   const snap = await getDoc(doc(db, 'bot_sessions', String(chatId)));
@@ -101,10 +99,8 @@ async function getReport() {
   const sold = vSnap.docs.filter(d => d.data().sold).length;
   return (
     `📊 *RELATÓRIO — PREMIUM CAMINHÕES*\n\n` +
-    `🚛 Veículos disponíveis: *${available}*\n` +
-    `✅ Vendidos: *${sold}*\n` +
-    `📩 Leads total: *${cSnap.size}*\n` +
-    `📩 Leads hoje: *${todayLeads.length}*\n` +
+    `🚛 Disponíveis: *${available}* | Vendidos: *${sold}*\n` +
+    `📩 Leads total: *${cSnap.size}* | Hoje: *${todayLeads.length}*\n` +
     `🖼️ Banners ativos: *${bSnap.size}*`
   );
 }
@@ -161,52 +157,41 @@ async function markSold(name: string) {
   return null;
 }
 
-// ── Gemini helpers ─────────────────────────────────────────────────────────────
+// ── Gemini ────────────────────────────────────────────────────────────────────
 
 async function detectIntent(text: string): Promise<string> {
   try {
-    const result = await ai.models.generateContent({
+    const r = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts: [{ text: `Classifique a mensagem em UMA palavra exata:
-- add_vehicle (quer adicionar/cadastrar veículo/caminhão)
-- mark_sold (quer marcar como vendido)
-- get_report (quer relatório/resumo/status)
-- get_contacts_today (contatos/leads de hoje)
-- get_contacts_all (contatos/leads em geral)
-- cancel (cancelar/parar/sair)
-- help (qualquer outra coisa)
+      contents: [{ role: 'user', parts: [{ text: `Classifique em UMA palavra:
+add_vehicle | mark_sold | get_report | get_contacts_today | get_contacts_all | cancel | help
 
 Mensagem: "${text}"
-Retorne APENAS uma das palavras acima.` }] }],
+Retorne APENAS a palavra.` }] }],
     });
-    return (result.text ?? '').trim().toLowerCase().replace(/[^a-z_]/g, '');
+    return (r.text ?? '').trim().toLowerCase().replace(/[^a-z_]/g, '');
   } catch {
     const t = text.toLowerCase();
     if (t.match(/adicionar|cadastrar|novo vei|novo cam/)) return 'add_vehicle';
     if (t.match(/vendido|vender|vendeu/)) return 'mark_sold';
-    if (t.match(/relat|resumo|status|como t[aá]/)) return 'get_report';
-    if (t.includes('hoje')) return 'get_contacts_today';
+    if (t.match(/relat|resumo|status/)) return 'get_report';
+    if (t.includes('hoje') && t.includes('contato')) return 'get_contacts_today';
     if (t.includes('contato')) return 'get_contacts_all';
     return 'help';
   }
 }
 
-// Extract all vehicle fields at once from any free-form message
 async function parseVehicleFromText(text: string): Promise<Record<string, string>> {
   try {
-    const result = await ai.models.generateContent({
+    const r = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts: [{ text: `Extraia dados de um caminhão/veículo desta mensagem e retorne JSON.
-Use string vazia "" para campos não encontrados.
-Campos obrigatórios: brand (marca), model (modelo), year (ano, só número), price (preço, só número sem pontos/vírgulas/R$), km (quilometragem, só número)
-Campos opcionais: transmission (câmbio), power (potência, ex: "540 CV"), traction (tração, ex: "6x4"), description (descrição)
+      contents: [{ role: 'user', parts: [{ text: `Extraia dados de veículo e retorne JSON. Use "" para campos não encontrados.
+Campos: brand, model, year (só número), price (só número), km (só número), transmission, power, traction, description
 
 Mensagem: "${text}"
-
-Retorne APENAS JSON válido, sem markdown, sem explicação:
-{"brand":"","model":"","year":"","price":"","km":"","transmission":"","power":"","traction":"","description":""}` }] }],
+Retorne APENAS JSON válido sem markdown.` }] }],
     });
-    const raw = (result.text ?? '').trim();
+    const raw = (r.text ?? '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
     return JSON.parse(m?.[0] || raw);
   } catch {
@@ -216,49 +201,54 @@ Retorne APENAS JSON válido, sem markdown, sem explicação:
 
 async function extractField(field: string, text: string): Promise<string> {
   const prompts: Record<string, string> = {
-    brand: `Extraia apenas a marca do caminhão. Retorne só a marca. Ex: "Scania". Mensagem: "${text}"`,
-    model: `Extraia apenas o modelo do caminhão. Retorne só o modelo. Ex: "R500". Mensagem: "${text}"`,
+    brand: `Extraia apenas a marca do caminhão. Retorne só a marca. Mensagem: "${text}"`,
+    model: `Extraia apenas o modelo. Retorne só o modelo. Mensagem: "${text}"`,
     year: `Extraia apenas o ano (4 dígitos). Retorne só o número. Mensagem: "${text}"`,
-    price: `Extraia apenas o valor numérico do preço sem formatação. Ex: "850000". Mensagem: "${text}"`,
-    km: `Extraia apenas a quilometragem numérica sem formatação. Ex: "150000". Mensagem: "${text}"`,
-    transmission: `Extraia o tipo de câmbio. Ex: "Manual", "Automático". Mensagem: "${text}"`,
-    power: `Extraia a potência. Ex: "540 CV". Se não há, retorne "". Mensagem: "${text}"`,
-    traction: `Extraia a tração. Ex: "6x4". Se não há, retorne "". Mensagem: "${text}"`,
-    description: `Retorne o texto como descrição do veículo, limpo e direto. Mensagem: "${text}"`,
-    vehicle_name: `Extraia o nome do veículo (marca + modelo) para busca. Ex: "Scania R500". Mensagem: "${text}"`,
+    price: `Extraia o valor do preço, retorne só os dígitos sem pontos/vírgulas. Mensagem: "${text}"`,
+    km: `Extraia a quilometragem, retorne só os dígitos. Mensagem: "${text}"`,
+    transmission: `Extraia o tipo de câmbio. Ex: Manual, Automático. Mensagem: "${text}"`,
+    power: `Extraia a potência. Ex: "540 CV". Se não houver retorne vazio. Mensagem: "${text}"`,
+    traction: `Extraia a tração. Ex: "6x4". Se não houver retorne vazio. Mensagem: "${text}"`,
+    description: `Retorne o texto como descrição do veículo. Mensagem: "${text}"`,
+    vehicle_name: `Extraia o nome do veículo (marca + modelo) para busca. Mensagem: "${text}"`,
   };
   try {
-    const result = await ai.models.generateContent({
+    const r = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
       contents: [{ role: 'user', parts: [{ text: prompts[field] || text }] }],
     });
-    return (result.text ?? '').trim();
+    return (r.text ?? '').trim();
   } catch {
     return text.trim();
   }
 }
 
-// ── Vehicle conversation steps ────────────────────────────────────────────────
+// ── Vehicle flow ──────────────────────────────────────────────────────────────
 
 const REQUIRED_FIELDS = ['brand', 'model', 'year', 'price', 'km'];
 const OPTIONAL_FIELDS = ['transmission', 'power', 'traction', 'description'];
-
-const QUESTIONS: Record<string, string> = {
-  brand:        '🚛 Qual a *marca* do caminhão?\n\n_Ex: Scania, Volvo, Mercedes, DAF_',
-  model:        '📝 Qual o *modelo*?\n\n_Ex: R500, FH540, Axor 2544_',
-  year:         '📅 Qual o *ano* de fabricação?',
-  price:        '💰 Qual o *preço*?\n\n_Ex: 850000 ou R$ 850.000_',
-  km:           '🔢 Quantos *quilômetros*?\n\n_Ex: 150000 ou 150.000 km_',
-  transmission: '⚙️ Qual o *câmbio*?\n\n_Ex: Manual, Automático, ZF — ou "pular"_',
-  power:        '💪 Qual a *potência*?\n\n_Ex: 540 CV — ou "pular"_',
-  traction:     '🔧 Qual a *tração*?\n\n_Ex: 6x4, 4x2 — ou "pular"_',
-  description:  '📄 Descrição do veículo — ou "pular"',
-};
-
 const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
+const QUESTIONS: Record<string, string> = {
+  brand:        '🚛 Qual a *marca* do caminhão?\n_Ex: Scania, Volvo, Mercedes, DAF_',
+  model:        '📝 Qual o *modelo*?\n_Ex: R500, FH540, Axor 2544_',
+  year:         '📅 Qual o *ano* de fabricação?',
+  price:        '💰 Qual o *preço*?\n_Ex: 850000 ou R$ 850.000_',
+  km:           '🔢 Quantos *quilômetros*?\n_Ex: 150000 ou 150.000 km_',
+  transmission: '⚙️ Qual o *câmbio*?\n_Ex: Manual, Automático, ZF_ — ou "pular"',
+  power:        '💪 Qual a *potência*?\n_Ex: 540 CV_ — ou "pular"',
+  traction:     '🔧 Qual a *tração*?\n_Ex: 6x4, 4x2_ — ou "pular"',
+  description:  '📄 Escreva uma *descrição* do veículo — ou "pular"',
+};
+
+const PHOTOS_QUESTION =
+  `📸 *Envie as fotos do veículo agora.*\n\n` +
+  `Pode enviar uma ou várias fotos.\n` +
+  `Quando terminar, envie *"ok"* para confirmar o cadastro.\n` +
+  `Ou envie *"pular"* para cadastrar sem fotos (adicione pelo painel depois).`;
+
 function nextMissingField(data: Record<string, any>): string | null {
-  return ALL_FIELDS.find(f => !data[f] && data[f] !== 0) ?? null;
+  return ALL_FIELDS.find(f => data[f] === undefined || data[f] === null) ?? null;
 }
 
 function buildSummary(data: Record<string, any>): string {
@@ -273,9 +263,23 @@ function buildSummary(data: Record<string, any>): string {
     (data.power ? `💪 Potência: ${data.power}\n` : '') +
     (data.traction ? `🔧 Tração: ${data.traction}\n` : '') +
     (data.description ? `📄 ${data.description}\n` : '') +
-    `📸 Fotos: ${imgs.length > 0 ? imgs.length : 'nenhuma (adicione no painel)'}\n` +
-    `\nConfirmar e salvar? Responda *sim* ou *não*\n_Ainda pode enviar fotos antes de confirmar._`
+    `📸 Fotos: ${imgs.length > 0 ? imgs.length + ' foto(s)' : 'nenhuma'}\n\n` +
+    `Confirmar e salvar? Responda *sim* ou *não*`
   );
+}
+
+// After all text fields collected, transition to photos step or confirm
+async function transitionToPhotosOrConfirm(chatId: number, data: Record<string, any>) {
+  const images: string[] = data.images || [];
+  if (images.length > 0) {
+    // Already has photos — go to confirm
+    await setSession(chatId, 'add_vehicle:confirm', data);
+    await send(chatId, buildSummary(data));
+  } else {
+    // No photos yet — ask
+    await setSession(chatId, 'add_vehicle:photos', data);
+    await send(chatId, PHOTOS_QUESTION);
+  }
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -289,10 +293,11 @@ export default async function handler(req: any, res: any) {
 
     const chatId: number = msg.chat.id;
     const text: string = (msg.text || msg.caption || '').trim();
-    const photos = msg.photo as any[] | undefined; // Telegram sends photo array (multiple sizes)
+    const photos: any[] | undefined = msg.photo;
 
+    // Setup commands — no auth required
     if (text === '/start' || text === '/myid') {
-      await send(chatId, `🤖 *Bot Premium Caminhões*\n\nSeu Chat ID: \`${chatId}\`\n\nCopie e adicione como \`ADMIN_CHAT_ID\` no Vercel.`);
+      await send(chatId, `🤖 *Bot Premium Caminhões*\n\nSeu Chat ID: \`${chatId}\`\nAdicione como \`ADMIN_CHAT_ID\` no Vercel.`);
       return res.status(200).json({ ok: true });
     }
 
@@ -302,57 +307,62 @@ export default async function handler(req: any, res: any) {
 
     // ── Photo received ─────────────────────────────────────────────────────
     if (photos && photos.length > 0) {
-      const session = await getSession(chatId);
-      const isAddingVehicle = session?.step?.startsWith('add_vehicle');
-
-      // Upload to Cloudinary
+      // Upload largest resolution
       let photoUrl = '';
       try {
-        const largest = photos[photos.length - 1]; // Telegram provides multiple resolutions
+        const largest = photos[photos.length - 1];
         const buffer = await downloadTelegramPhoto(largest.file_id);
         photoUrl = await uploadToCloudinary(buffer, `vehicle_${Date.now()}.jpg`);
       } catch (err: any) {
-        await send(chatId, `❌ Erro ao fazer upload da foto: ${err?.message}. Tente novamente.`);
+        await send(chatId, `❌ Erro no upload: ${err?.message}`);
         return res.status(200).json({ ok: true });
       }
 
-      if (isAddingVehicle && session) {
-        const images: string[] = session.data.images || [];
-        images.push(photoUrl);
-        const newData = { ...session.data, images };
-        await setSession(chatId, session.step, newData);
+      const session = await getSession(chatId);
 
-        const nextField = nextMissingField(newData);
-        if (session.step === 'add_vehicle:confirm') {
-          await send(chatId, `📸 Foto ${images.length} adicionada!\n\n${buildSummary(newData)}`);
-        } else if (nextField) {
-          await send(chatId, `📸 Foto ${images.length} adicionada! ✅\n\n${QUESTIONS[nextField]}`);
-        } else {
+      if (session?.step?.startsWith('add_vehicle')) {
+        // Accumulate photo in session
+        const images: string[] = [...(session.data.images || []), photoUrl];
+        const newData = { ...session.data, images };
+
+        if (session.step === 'add_vehicle:photos') {
+          // Still collecting photos
+          await setSession(chatId, 'add_vehicle:photos', newData);
+          await send(chatId, `📸 Foto *${images.length}* recebida! ✅\nEnvie mais fotos ou *"ok"* para confirmar.`);
+        } else if (session.step === 'add_vehicle:confirm') {
+          // Already at confirm — refresh summary with new photo
           await setSession(chatId, 'add_vehicle:confirm', newData);
-          await send(chatId, `📸 Foto ${images.length} adicionada! ✅\n\n${buildSummary(newData)}`);
+          await send(chatId, `📸 Foto *${images.length}* adicionada!\n\n${buildSummary(newData)}`);
+        } else {
+          // Still in text fields — save photo, continue asking fields
+          const nextField = nextMissingField(newData);
+          await setSession(chatId, session.step, newData);
+          await send(chatId, `📸 Foto *${images.length}* salva! ✅\n\n${nextField ? QUESTIONS[nextField] : 'Continue respondendo as perguntas.'}`);
         }
       } else {
-        // Not in a session — start vehicle flow with photo already saved
-        const newData: Record<string, any> = { images: [photoUrl] };
-        await setSession(chatId, `add_vehicle:brand`, newData);
-        await send(chatId, `📸 Foto recebida e salva!\n\nVamos cadastrar o veículo. Pode cancelar enviando "cancelar".\n\n${QUESTIONS['brand']}`);
+        // No active session — start vehicle flow with photo
+        await setSession(chatId, 'add_vehicle:brand', { images: [photoUrl] });
+        await send(chatId,
+          `📸 Foto recebida! Vamos cadastrar o veículo.\nCancele com "cancelar".\n\n${QUESTIONS['brand']}`
+        );
       }
 
-      // Also parse caption if it has vehicle data
+      // If caption has vehicle data, process it too
       if (text) {
         const extracted = await parseVehicleFromText(text);
         const hasData = Object.values(extracted).some(v => v !== '');
         if (hasData) {
           const currentSession = await getSession(chatId);
-          if (currentSession) {
-            const merged = { ...currentSession.data, ...Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== '')) };
+          if (currentSession?.step?.startsWith('add_vehicle')) {
+            const merged = {
+              ...currentSession.data,
+              ...Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== '')),
+            };
             const nextField = nextMissingField(merged);
             if (nextField) {
               await setSession(chatId, `add_vehicle:${nextField}`, merged);
-              await send(chatId, `✅ Dados extraídos da legenda!\n\n${QUESTIONS[nextField]}`);
             } else {
-              await setSession(chatId, 'add_vehicle:confirm', merged);
-              await send(chatId, buildSummary(merged));
+              await transitionToPhotosOrConfirm(chatId, merged);
             }
           }
         }
@@ -363,10 +373,10 @@ export default async function handler(req: any, res: any) {
 
     if (!text) return res.status(200).json({ ok: true });
 
-    // ── Cancel ─────────────────────────────────────────────────────────────
-    if (/cancelar|cancel|parar|sair|desistir|\/cancel/.test(text.toLowerCase())) {
+    // ── Cancel anywhere ────────────────────────────────────────────────────
+    if (/^(cancelar|cancel|parar|sair|desistir|\/cancel)$/i.test(text)) {
       await clearSession(chatId);
-      await send(chatId, '❌ Operação cancelada. Como posso ajudar?');
+      await send(chatId, '❌ Cancelado. Como posso ajudar?');
       return res.status(200).json({ ok: true });
     }
 
@@ -376,38 +386,54 @@ export default async function handler(req: any, res: any) {
     if (session) {
       const { step, data } = session;
 
-      // Add vehicle confirm step
-      if (step === 'add_vehicle:confirm') {
-        if (/^s/i.test(text)) {
-          await saveVehicle(data);
-          await clearSession(chatId);
-          await send(chatId,
-            `✅ *Veículo salvo com sucesso!*\n\n🚛 ${data.brand} ${data.model}\n` +
-            (data.images?.length ? `📸 ${data.images.length} foto(s) salva(s)\n` : '📸 Sem fotos — adicione no painel\n') +
-            `_Acesse o painel para gerenciar._`
-          );
+      // ── Photos step ──
+      if (step === 'add_vehicle:photos') {
+        const skipWords = /^(pular|skip|sem foto|nao|não|continuar|pronto|ok|pronto)$/i;
+        const confirmWords = /^(ok|pronto|feito|confirmar|continuar|isso)$/i;
+
+        if (skipWords.test(text) || confirmWords.test(text)) {
+          await setSession(chatId, 'add_vehicle:confirm', data);
+          await send(chatId, buildSummary(data));
         } else {
-          await clearSession(chatId);
-          await send(chatId, '❌ Cadastro cancelado.');
+          await send(chatId, `📸 Para enviar fotos, use o clipe 📎 do Telegram e selecione a imagem.\nOu envie *"pular"* para continuar sem fotos.`);
         }
         return res.status(200).json({ ok: true });
       }
 
-      // Add vehicle field steps
+      // ── Confirm step ──
+      if (step === 'add_vehicle:confirm') {
+        if (/^s(im)?$/i.test(text)) {
+          await saveVehicle(data);
+          await clearSession(chatId);
+          await send(chatId,
+            `✅ *Veículo salvo!*\n\n🚛 ${data.brand} ${data.model}\n` +
+            (data.images?.length ? `📸 ${data.images.length} foto(s)\n` : '📸 Sem fotos — adicione no painel\n') +
+            `_Acesse o painel para gerenciar._`
+          );
+        } else if (/^n(ão|ao)?$/i.test(text)) {
+          await clearSession(chatId);
+          await send(chatId, '❌ Cadastro cancelado.');
+        } else {
+          // Allow sending more photos at confirm stage — handled above in photo block
+          await send(chatId, `Responda *sim* para salvar ou *não* para cancelar.\nAinda pode enviar mais fotos.`);
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Text field steps ──
       if (step.startsWith('add_vehicle:')) {
         const currentField = step.replace('add_vehicle:', '');
 
-        // Try to parse multiple fields from this message
+        // Try bulk parse first
         const extracted = await parseVehicleFromText(text);
-        const hasMultiple = Object.values(extracted).filter(v => v !== '').length > 1;
+        const filledCount = Object.values(extracted).filter(v => v !== '').length;
 
         let newData: Record<string, any>;
-
-        if (hasMultiple) {
-          // User sent multiple fields at once — merge
+        if (filledCount > 1) {
+          // Multiple fields in one message
           newData = { ...data, ...Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== '')) };
         } else {
-          // Single field response
+          // Single field
           const isOptional = OPTIONAL_FIELDS.includes(currentField);
           const skipped = isOptional && /^pular$/i.test(text);
           const value = skipped ? '' : (extracted[currentField] || await extractField(currentField, text));
@@ -419,48 +445,42 @@ export default async function handler(req: any, res: any) {
           await setSession(chatId, `add_vehicle:${nextField}`, newData);
           await send(chatId, QUESTIONS[nextField]);
         } else {
-          await setSession(chatId, 'add_vehicle:confirm', newData);
-          await send(chatId, buildSummary(newData));
+          await transitionToPhotosOrConfirm(chatId, newData);
         }
         return res.status(200).json({ ok: true });
       }
 
-      // Mark sold: waiting for vehicle name
+      // ── Mark sold: waiting for name ──
       if (step === 'mark_sold:ask_name') {
         const name = await extractField('vehicle_name', text);
         const sold = await markSold(name);
         await clearSession(chatId);
         await send(chatId, sold
           ? `✅ *${sold.brand} ${sold.model}* marcado como vendido!`
-          : `❌ Veículo "${name}" não encontrado. Verifique o nome.`
+          : `❌ "${name}" não encontrado. Verifique o nome no estoque.`
         );
         return res.status(200).json({ ok: true });
       }
     }
 
-    // ── No session: detect intent and check for inline data ────────────────
+    // ── No session: detect intent ──────────────────────────────────────────
     const intent = await detectIntent(text);
 
     if (intent === 'add_vehicle') {
-      // Try to extract vehicle data from the same message
       const extracted = await parseVehicleFromText(text);
       const filledData = Object.fromEntries(Object.entries(extracted).filter(([, v]) => v !== ''));
       const nextField = nextMissingField(filledData);
 
       if (!nextField) {
-        // All fields found in one message — go straight to confirm
-        await setSession(chatId, 'add_vehicle:confirm', filledData);
-        await send(chatId, `✅ Extraí todos os dados!\n\n${buildSummary(filledData)}`);
+        await transitionToPhotosOrConfirm(chatId, filledData);
       } else if (Object.keys(filledData).length > 0) {
-        // Partial data found — continue from next missing field
         await setSession(chatId, `add_vehicle:${nextField}`, filledData);
-        const filled = ALL_FIELDS.filter(f => filledData[f]).join(', ');
-        await send(chatId, `✅ Já peguei: *${filled}*\n\n${QUESTIONS[nextField]}`);
+        const filled = ALL_FIELDS.filter(f => filledData[f] !== undefined).join(', ');
+        await send(chatId, `✅ Peguei: *${filled}*\n\n${QUESTIONS[nextField]}`);
       } else {
-        // No data — start from scratch
-        await setSession(chatId, `add_vehicle:brand`, {});
+        await setSession(chatId, 'add_vehicle:brand', {});
         await send(chatId,
-          `🚛 *Cadastro de Veículo*\n\nVou te guiar passo a passo.\nPode enviar tudo de uma vez ou me mandar as fotos a qualquer momento!\nCancele enviando "cancelar".\n\n${QUESTIONS['brand']}`
+          `🚛 *Cadastro de Veículo*\n\nVou guiar passo a passo.\nPode enviar tudo de uma vez ou as fotos a qualquer momento.\nCancele com "cancelar".\n\n${QUESTIONS['brand']}`
         );
       }
       return res.status(200).json({ ok: true });
@@ -468,16 +488,17 @@ export default async function handler(req: any, res: any) {
 
     if (intent === 'mark_sold') {
       const name = await extractField('vehicle_name', text);
-      if (name && name.length > 2) {
+      if (name && name.length > 3) {
         const sold = await markSold(name);
-        await send(chatId, sold
-          ? `✅ *${sold.brand} ${sold.model}* marcado como vendido!`
-          : `❌ "${name}" não encontrado. Qual o nome exato?`
-        );
-        if (!sold) await setSession(chatId, 'mark_sold:ask_name', {});
+        if (sold) {
+          await send(chatId, `✅ *${sold.brand} ${sold.model}* marcado como vendido!`);
+        } else {
+          await setSession(chatId, 'mark_sold:ask_name', {});
+          await send(chatId, `❌ "${name}" não encontrado.\n\n🔍 Qual o nome exato do veículo?\n_Ex: Scania R500_`);
+        }
       } else {
         await setSession(chatId, 'mark_sold:ask_name', {});
-        await send(chatId, '🔍 Qual o *nome do veículo* que foi vendido?\n\n_Ex: Scania R500, Volvo FH_');
+        await send(chatId, '🔍 Qual o *nome do veículo* que foi vendido?\n_Ex: Scania R500, Volvo FH_');
       }
       return res.status(200).json({ ok: true });
     }
@@ -488,18 +509,17 @@ export default async function handler(req: any, res: any) {
 
     await send(chatId,
       `🤖 *Assistente Premium Caminhões*\n\n` +
-      `Posso te ajudar com:\n\n` +
-      `🚛 *Adicionar veículo* — pode enviar tudo de uma vez ou passo a passo\n` +
-      `📸 *Fotos* — envie a qualquer momento durante o cadastro\n` +
-      `✅ *Marcar como vendido* — atualiza o estoque\n` +
+      `🚛 *Adicionar veículo* — passo a passo ou tudo de uma vez\n` +
+      `📸 *Fotos* — envie durante o cadastro (clipe 📎)\n` +
+      `✅ *Marcar como vendido* — atualiza estoque\n` +
       `📊 *Relatório* — resumo do site\n` +
-      `📩 *Contatos de hoje / recentes* — leads\n\n` +
-      `_Escreva de forma natural, entendo português informal._`
+      `📩 *Contatos de hoje / recentes*\n\n` +
+      `_Escreva em português informal, entendo tudo._`
     );
     return res.status(200).json({ ok: true });
 
   } catch (err: any) {
-    console.error('telegram webhook error:', err);
+    console.error('webhook error:', err);
     try {
       const chatId = req.body?.message?.chat?.id;
       if (chatId) await send(chatId, `❌ Erro: ${err?.message || 'tente novamente'}`);
