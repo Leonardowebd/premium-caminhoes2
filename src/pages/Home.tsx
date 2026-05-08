@@ -16,6 +16,41 @@ function extractYouTubeId(url: string): string | null {
   }
   return null;
 }
+
+function YoutubeBannerPlayer({ vidId, muted }: { vidId: string; muted: boolean }) {
+  const [ready, setReady] = useState(false);
+  const src = `https://www.youtube.com/embed/${vidId}?autoplay=1&loop=1&controls=0&showinfo=0&modestbranding=1&mute=${muted ? 1 : 0}&playlist=${vidId}&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0`;
+  return (
+    <>
+      <img
+        src={`https://img.youtube.com/vi/${vidId}/maxresdefault.jpg`}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ opacity: ready ? 0 : 1, transition: 'opacity 0.6s ease', pointerEvents: 'none' }}
+      />
+      <iframe
+        src={src}
+        allow="autoplay; encrypted-media; fullscreen"
+        onLoad={() => setTimeout(() => setReady(true), 1500)}
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '177.78vh',
+          minWidth: '100%',
+          height: '56.25vw',
+          minHeight: '100%',
+          pointerEvents: 'none',
+          border: 'none',
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 0.8s ease',
+        }}
+        title="Banner"
+      />
+    </>
+  );
+}
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Filter, ShieldCheck, Headset, ArrowRight, Gauge, Activity, CalendarDays } from 'lucide-react';
@@ -132,25 +167,7 @@ export default function Home() {
           >
             {displayBanners[currentSlide]?.videoUrl ? (() => {
               const vidId = extractYouTubeId(displayBanners[currentSlide].videoUrl!);
-              return vidId ? (
-                <iframe
-                  src={`https://www.youtube.com/embed/${vidId}?autoplay=1&loop=1&controls=0&showinfo=0&modestbranding=1&mute=${bannerVideoMuted ? 1 : 0}&playlist=${vidId}&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0`}
-                  allow="autoplay; encrypted-media; fullscreen"
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '177.78vh',
-                    minWidth: '100%',
-                    height: '56.25vw',
-                    minHeight: '100%',
-                    pointerEvents: 'none',
-                    border: 'none',
-                  }}
-                  title={displayBanners[currentSlide]?.title || 'Banner'}
-                />
-              ) : null;
+              return vidId ? <YoutubeBannerPlayer vidId={vidId} muted={bannerVideoMuted} /> : null;
             })() : (
               <img
                 src={displayBanners[currentSlide]?.imageUrl}
