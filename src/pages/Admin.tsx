@@ -527,8 +527,8 @@ function VehicleManager() {
             </div>
 
             {isFormOpen && (
-               <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6 overflow-y-auto">
-                  <div className="bg-surface w-full max-w-4xl p-10 border border-white/10 relative">
+               <div className="fixed inset-0 bg-black/90 z-[100] overflow-y-auto p-6">
+                  <div className="bg-surface w-full max-w-4xl p-8 border border-white/10 relative mx-auto my-6">
                      <button onClick={() => setIsFormOpen(false)} className="absolute top-6 right-6 text-primary"><X /></button>
                      <h2 className="text-2xl font-headline font-black text-white uppercase mb-10 border-l-4 border-primary pl-4">
                         {editingVehicle ? 'Editar Veículo' : 'Novo Veículo'}
@@ -1260,14 +1260,14 @@ function BannerManager() {
             )}
 
             {isFormOpen && (
-               <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6 overflow-y-auto">
-                  <div className="bg-surface w-full max-w-lg p-10 border border-white/10 relative my-6">
-                     <button onClick={() => setIsFormOpen(false)} className="absolute top-6 right-6 text-primary"><X /></button>
-                     <h2 className="text-xl font-headline font-black text-white uppercase mb-8 border-l-4 border-primary pl-4">Gestão de Banner</h2>
-                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+               <div className="fixed inset-0 bg-black/90 z-[100] overflow-y-auto p-6">
+                  <div className="bg-surface w-full max-w-lg p-8 border border-white/10 relative mx-auto my-6">
+                     <button onClick={() => setIsFormOpen(false)} className="absolute top-4 right-4 text-primary"><X /></button>
+                     <h2 className="text-xl font-headline font-black text-white uppercase mb-6 border-l-4 border-primary pl-4">Gestão de Banner</h2>
+                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-1">
                            <label className="text-[10px] font-bold uppercase text-primary">Rótulo Interno <span className="text-on-surface-variant">(Opcional)</span></label>
-                           <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-3 px-4 outline-none" placeholder="Ex: Banner Scania – Junho" />
+                           <input {...register('title')} defaultValue={editing?.title} className="w-full bg-[#2a2a2a] text-white py-2 px-4 outline-none" placeholder="Ex: Banner Scania – Junho" />
                         </div>
 
                         {/* Mode Toggle */}
