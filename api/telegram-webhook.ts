@@ -426,8 +426,8 @@ export default async function handler(req: any, res: any) {
     if (videoMsg || docMsg) {
       const media = videoMsg || docMsg;
       const fileSize = media.file_size || 0;
-      if (fileSize > 50 * 1024 * 1024) {
-        await send(chatId, '❌ Vídeo muito grande (máx 50MB). Compacte e tente novamente.');
+      if (fileSize > 20 * 1024 * 1024) {
+        await send(chatId, '❌ Vídeo muito grande (máx 20MB via Telegram). Compacte e tente novamente.');
         return res.status(200).json({ ok: true });
       }
       try {
