@@ -200,10 +200,30 @@ export default function Home() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Carousel Nav */}
-        <div className="absolute bottom-16 left-6 sm:left-auto sm:right-6 flex gap-4 z-40">
+        {/* Arrow Buttons */}
+        {displayBanners.length > 1 && (
+          <>
+            <button
+              onClick={prevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-40 w-12 h-12 bg-black/50 hover:bg-primary hover:text-black text-white flex items-center justify-center transition-all"
+              aria-label="Banner anterior"
+            >
+              <ChevronLeft size={28} />
+            </button>
+            <button
+              onClick={nextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-40 w-12 h-12 bg-black/50 hover:bg-primary hover:text-black text-white flex items-center justify-center transition-all"
+              aria-label="Próximo banner"
+            >
+              <ChevronRight size={28} />
+            </button>
+          </>
+        )}
+
+        {/* Carousel Dots */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-40">
           {displayBanners.map((_, i) => (
-            <button 
+            <button
               key={i}
               onClick={() => setCurrentSlide(i)}
               className={cn(
