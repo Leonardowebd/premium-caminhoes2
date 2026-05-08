@@ -210,6 +210,19 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ ok: true });
   } catch (err: any) {
     console.error('telegram webhook error:', err);
+    try {
+      const chatId = req.body?.message?.chat?.id;
+      if (chatId) {
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `❌ Erro interno: ${err?.message || 'desconhecido'}`,
+          }),
+        });
+      }
+    } catch {}
     return res.status(200).json({ ok: true });
   }
 }
