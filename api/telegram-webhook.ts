@@ -133,37 +133,26 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true });
     }
 
-    // Simple keyword matching (no Gemini needed)
-    const t = text.toLowerCase().trim();
     let reply = '';
 
-    if (t.includes('relatório') || t.includes('relatorio') || t.includes('resumo') || t.includes('status') || t === '/relatorio') {
-      reply = await getReport();
-    } else if ((t.includes('contato') && t.includes('hoje')) || t === '/contatoshoje') {
-      reply = await getContacts('today');
-    } else if (t.includes('contato') || t === '/contatos') {
-      reply = await getContacts('all');
-    } else if (t.includes('vendido') || t === '/vendido') {
-      const name = text.replace(/vendido/i, '').replace(/\/vendido/i, '').trim();
-      if (!name) {
-        reply = '❓ Informe o modelo. Ex: "Vendido Scania R500"';
-      } else {
-        const sold = await markSold(name);
-        reply = sold
-          ? `✅ *${sold.brand} ${sold.model}* marcado como vendido!`
-          : `❌ Veículo "${name}" não encontrado.`;
-      }
-    } else if (t.includes('adicionar') || t.includes('add ') || t === '/adicionar') {
-      // Try Gemini to parse vehicle data
-      try {
-        const result = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: SYSTEM_PROMPT + '\n\nMensagem: ' + text,
-        });
-        const aiText = (result.text || '').trim();
-        const m = aiText.match(/\{[\s\S]*\}/);
-        const parsed = JSON.parse(m?.[0] || aiText);
-        if (parsed.action === 'add_vehicle') {
+    try {
+      // Use Gemini for full natural language understanding
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ role: 'user', parts: [{ text: SYSTEM_PROMPT + '\n\nMensagem: ' + text }] }],
+      });
+      const aiText = (result.text ?? '').trim();
+      const m = aiText.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(m?.[0] || aiText);
+
+      switch (parsed.action) {
+        case 'get_report':
+          reply = await getReport();
+          break;
+        case 'get_contacts':
+          reply = await getContacts(parsed.data?.filter || 'all');
+          break;
+        case 'add_vehicle':
           await addVehicle(parsed.data);
           reply =
             `✅ *Veículo adicionado!*\n\n` +
@@ -172,22 +161,34 @@ export default async function handler(req: any, res: any) {
             `💰 R$ ${Number(parsed.data.price).toLocaleString('pt-BR')}\n` +
             `📍 ${Number(parsed.data.kilometers).toLocaleString('pt-BR')} km\n\n` +
             `_Acesse o painel para adicionar fotos._`;
-        } else {
-          reply = '❓ Não entendi os dados. Ex: "Adicionar Scania R500, R$850.000, 150.000km, 2021, 6x4"';
+          break;
+        case 'mark_sold': {
+          const sold = await markSold(parsed.data?.vehicle_name || '');
+          reply = sold
+            ? `✅ *${sold.brand} ${sold.model}* marcado como vendido!`
+            : `❌ Veículo "${parsed.data?.vehicle_name}" não encontrado.`;
+          break;
         }
-      } catch (geminiErr: any) {
-        reply = `❌ Erro ao processar: ${geminiErr?.message || 'verifique GEMINI_API_KEY'}`;
+        default:
+          reply =
+            `🤖 *Comandos disponíveis:*\n\n` +
+            `📊 "Me manda um relatório"\n` +
+            `📩 "Quais os contatos de hoje?"\n` +
+            `🚛 "Adicionar Scania R500, R$850.000, 150.000km, 2021"\n` +
+            `✅ "Marcar Volvo FH como vendido"`;
       }
-    } else if (t === '/help' || t === '/ajuda') {
-      reply =
-        `🤖 *Comandos:*\n\n` +
-        `📊 "Relatório"\n` +
-        `📩 "Contatos hoje"\n` +
-        `📩 "Contatos"\n` +
-        `🚛 "Adicionar Scania R500, 850000, 150km, 2021"\n` +
-        `✅ "Vendido Scania R500"`;
-    } else {
-      reply = '❓ Não entendi. Diga "Relatório", "Contatos hoje", "Adicionar [dados]" ou "Vendido [modelo]".';
+    } catch (geminiErr: any) {
+      // Fallback to keyword matching if Gemini fails
+      const t = text.toLowerCase();
+      if (t.includes('relat') || t.includes('resumo') || t.includes('status')) {
+        reply = await getReport();
+      } else if (t.includes('contato') && t.includes('hoje')) {
+        reply = await getContacts('today');
+      } else if (t.includes('contato')) {
+        reply = await getContacts('all');
+      } else {
+        reply = `❌ Erro IA: ${geminiErr?.message || 'tente novamente'}. Use palavras como "Relatório" ou "Contatos hoje".`;
+      }
     }
 
     await sendMessage(chatId, reply);
