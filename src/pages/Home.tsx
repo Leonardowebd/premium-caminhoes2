@@ -59,6 +59,7 @@ import { formatCurrency, cn } from '../lib/utils';
 export default function Home() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [allVehicles, setAllVehicles] = useState<Vehicle[]>([]);
+  const [featuredIdx, setFeaturedIdx] = useState(0);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -97,7 +98,7 @@ export default function Home() {
         const vehiclesSnap = await getDocs(vehiclesQuery);
         const vAllData = vehiclesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle));
         setAllVehicles(vAllData);
-        setVehicles(vAllData.filter(v => v.isFeatured && !v.sold).slice(0, 4));
+        setVehicles(vAllData.filter(v => v.isFeatured && !v.sold));
 
         const bannersSnap = await getDocs(collection(db, 'banners'));
         const bData = bannersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Banner)).sort((a, b) => a.order - b.order);
@@ -311,14 +312,24 @@ export default function Home() {
             </h2>
             <p className="text-on-surface-variant mt-2 max-w-lg text-sm sm:text-base">As máquinas mais potentes do mercado selecionadas para sua frota de alto desempenho.</p>
           </div>
-          <div className="flex gap-2">
-             <button className="w-12 h-12 border border-white/10 flex items-center justify-center text-white hover:bg-primary hover:text-black transition-all">
+          {vehicles.length > 4 && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFeaturedIdx(i => (i - 1 + vehicles.length) % vehicles.length)}
+                className="w-12 h-12 border border-white/10 flex items-center justify-center text-white hover:bg-primary hover:text-black transition-all"
+                aria-label="Anterior"
+              >
                 <ChevronLeft size={24} />
-             </button>
-             <button className="w-12 h-12 border border-white/10 flex items-center justify-center text-white hover:bg-primary hover:text-black transition-all">
+              </button>
+              <button
+                onClick={() => setFeaturedIdx(i => (i + 1) % vehicles.length)}
+                className="w-12 h-12 border border-white/10 flex items-center justify-center text-white hover:bg-primary hover:text-black transition-all"
+                aria-label="Próximo"
+              >
                 <ChevronRight size={24} />
-             </button>
-          </div>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -326,7 +337,7 @@ export default function Home() {
              Array(4).fill(0).map((_, i) => (
                 <div key={i} className="bg-surface h-[500px] animate-pulse" />
              ))
-          ) : vehicles.map(vehicle => (
+          ) : Array.from({ length: Math.min(4, vehicles.length) }, (_, i) => vehicles[(featuredIdx + i) % vehicles.length]).map(vehicle => (
             <Link key={vehicle.id} to={`/veiculo/${vehicle.id}`} className="group bg-surface flex flex-col border border-white/5 hover:border-primary/30 transition-all">
               <div className="relative aspect-[16/10] overflow-hidden">
                 <img 
