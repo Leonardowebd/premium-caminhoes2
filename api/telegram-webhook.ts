@@ -338,17 +338,25 @@ async function handleMediaUpload(
   const session = await getSession(chatId);
 
   let data: Record<string, any> = session?.data || {};
-  const step: string = session?.step || '';
+  let step: string = session?.step || '';
 
-  // Add media to data first
+  // Detect if this photo belongs to same album already being accumulated
+  const sameGroup = !!mediaGroupId && data._mediaGroupId === mediaGroupId;
+
+  // New album while session has data from a different (abandoned) flow → start fresh
+  const isNewAlbum = !!mediaGroupId && !!session && !!data._mediaGroupId && data._mediaGroupId !== mediaGroupId;
+  if (isNewAlbum) {
+    data = {};
+    step = '';
+    await clearSession(chatId);
+  }
+
+  // Add media to data
   if (type === 'image') {
     data = { ...data, images: [...(data.images || []), url], imagePublicIds: [...(data.imagePublicIds || []), publicId] };
   } else {
     data = { ...data, videoUrl: url, videoPublicIds: [...(data.videoPublicIds || []), publicId] };
   }
-
-  // Detect if this photo belongs to same album already being accumulated
-  const sameGroup = mediaGroupId && data._mediaGroupId === mediaGroupId;
 
   // Parse caption BEFORE any session logic (only on first photo of group or single photo)
   if (captionText && !sameGroup) {
@@ -359,10 +367,10 @@ async function handleMediaUpload(
     }
   }
 
-  // Track media group to avoid duplicate messages for same album
+  // Track media group
   if (mediaGroupId) data = { ...data, _mediaGroupId: mediaGroupId };
 
-  // If same album: accumulate silently (no message spam)
+  // Same album: accumulate silently (no message spam)
   if (sameGroup) {
     await setSession(chatId, step || 'add_vehicle:photos', data);
     return;
@@ -462,10 +470,10 @@ export default async function handler(req: any, res: any) {
 
     if (!text) return res.status(200).json({ ok: true });
 
-    // ── Cancel ─────────────────────────────────────────────────────────────
-    if (/^(cancelar|cancel|parar|sair|desistir|\/cancel)$/i.test(text)) {
+    // ── Cancel / Reset ─────────────────────────────────────────────────────
+    if (/^(cancelar|cancel|parar|sair|desistir|\/cancel|reset|reiniciar|recomeçar|recomecar|novo|\/reset)$/i.test(text)) {
       await clearSession(chatId);
-      await send(chatId, '❌ Cancelado. Como posso ajudar?');
+      await send(chatId, '🔄 Reiniciado. Como posso ajudar?');
       return res.status(200).json({ ok: true });
     }
 
@@ -552,7 +560,30 @@ export default async function handler(req: any, res: any) {
         } else {
           const isOptional = OPTIONAL_FIELDS.includes(currentField);
           const skipped = isOptional && /^pular$/i.test(text);
-          const value = skipped ? '' : (extracted[currentField] || await extractField(currentField, text));
+          let value = skipped ? '' : (extracted[currentField] || await extractField(currentField, text));
+
+          // Validate required numeric fields — ask again if result is clearly wrong
+          if (!skipped && currentField === 'year') {
+            const y = parseInt(value, 10);
+            if (isNaN(y) || y < 1950 || y > new Date().getFullYear() + 1) {
+              await send(chatId, `❌ Ano inválido. ${QUESTIONS['year']}`);
+              return res.status(200).json({ ok: true });
+            }
+          }
+          if (!skipped && currentField === 'price') {
+            const p = Number(String(value).replace(/\D/g, ''));
+            if (isNaN(p) || p <= 0) {
+              await send(chatId, `❌ Preço inválido. ${QUESTIONS['price']}`);
+              return res.status(200).json({ ok: true });
+            }
+          }
+          if (!skipped && currentField === 'km') {
+            const k = Number(String(value).replace(/\D/g, ''));
+            if (isNaN(k) || k < 0) {
+              await send(chatId, `❌ Quilometragem inválida. ${QUESTIONS['km']}`);
+              return res.status(200).json({ ok: true });
+            }
+          }
           newData = { ...data, [currentField]: value };
         }
 
